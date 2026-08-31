@@ -63,15 +63,15 @@
       letter-spacing: .5px;
     }
 
-    /* Dual Launch Cards & Interactive Ergonomics */
+    /* Suite Launch Cards & Interactive Ergonomics */
     .launch-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 28px;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
       margin-top: 32px;
     }
 
-    @media (max-width: 780px) {
+    @media (max-width: 1050px) {
       .launch-grid {
         grid-template-columns: 1fr;
       }
@@ -114,6 +114,10 @@
       background: linear-gradient(90deg, #d97706, #fbbf24);
     }
 
+    .launch-card.card-waiver::before {
+      background: linear-gradient(90deg, #eab308, #3b82f6);
+    }
+
     .launch-card:hover {
       transform: translateY(-4px);
       box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.5);
@@ -127,6 +131,22 @@
     .launch-card.card-weekly:hover {
       border-color: rgba(245, 158, 11, 0.45);
       box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.55), 0 0 24px rgba(217, 119, 6, 0.25);
+    }
+
+    .launch-card.card-waiver:hover {
+      border-color: rgba(234, 179, 8, 0.45);
+      box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.55), 0 0 24px rgba(234, 179, 8, 0.25);
+    }
+
+    .btn-waiver {
+      background: #ca8a04;
+      color: #0f172a;
+      box-shadow: 0 4px 14px rgba(202, 138, 4, 0.35);
+    }
+
+    .btn-waiver:hover {
+      background: #eab308;
+      box-shadow: 0 6px 18px rgba(234, 179, 8, 0.5);
     }
 
     .card-top {
@@ -467,6 +487,52 @@
           </a>
           <a href="weekly/index.html?sample=true" class="demo-link" onclick="event.stopPropagation()">
             or Explore Sample Matchup →
+          </a>
+        </div>
+      </div>
+
+      <!-- Card 3: Waiver Wire Radar & FAAB Optimizer -->
+      <div class="launch-card card-waiver" onclick="window.location.href='waiver/index.html'">
+        <div class="card-top">
+          <div class="card-icon-badge" style="border-color: rgba(234, 179, 8, 0.4); color: #eab308;">
+            📡
+          </div>
+          <div class="card-title">
+            <span>Waiver Wire Radar</span>
+            <span class="golden-bone-badge" style="background: rgba(234, 179, 8, 0.18); border-color: #eab308; color: #eab308;">
+              FAAB LAB
+            </span>
+          </div>
+          <p class="card-subtext">
+            100% client-side free agent radar, net roster delta analysis, positional streaming matrix, and tiered FAAB bid guidance.
+          </p>
+
+          <ul class="card-feature-list">
+            <li class="card-feature-item">
+              <span class="feature-icon">⚡</span>
+              <span><strong>Net Roster Delta & Cut Recommender</strong> — Compares top free agents against your weakest bench players.</span>
+            </li>
+            <li class="card-feature-item">
+              <span class="feature-icon">🛡️</span>
+              <span><strong>Positional Streaming Matrix</strong> — Flags DEF streamers with opponent total &le;18.5 pts and QB shootout spots.</span>
+            </li>
+            <li class="card-feature-item">
+              <span class="feature-icon">🔥</span>
+              <span><strong>Contingent Upside Index</strong> — Scores high-value RB handcuffs and target breakouts on a 1–100 scale.</span>
+            </li>
+            <li class="card-feature-item">
+              <span class="feature-icon">💵</span>
+              <span><strong>Tiered FAAB Bid Optimizer</strong> — Aggressive, Targeted, and Speculative dollar bid recommendations.</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card-footer-cta">
+          <a href="waiver/index.html" class="card-btn btn-waiver" onclick="event.stopPropagation()">
+            Launch Waiver Radar ➔
+          </a>
+          <a href="waiver/index.html?sample=true" class="demo-link" onclick="event.stopPropagation()">
+            or Explore Sample Waiver Wire →
           </a>
         </div>
       </div>

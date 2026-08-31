@@ -1,0 +1,169 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Waiver Wire Radar & FAAB Optimizer | Scout Bowie HQ</title>
+  <link rel="icon" type="image/webp" href="../assets/scout-bowie.webp">
+  <link rel="stylesheet" href="../shared/css/sleeper-theme.css">
+  <link rel="stylesheet" href="./styles.css">
+
+  <!-- Open Graph & Social Cards -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Waiver Wire Radar & FAAB Optimizer | Scout Bowie HQ">
+  <meta property="og:description" content="100% client-side fantasy waiver wire radar, net roster delta analysis, positional streaming matrix, and tiered FAAB bid optimization.">
+  <meta property="og:image" content="../assets/scout-bowie.webp">
+
+  <!-- GoatCounter Web Analytics -->
+  <script data-goatcounter="https://bowies-fantasy-football-toolbox.goatcounter.com/count"
+          async src="//gc.zgo.at/count.js"></script>
+</head>
+<body>
+
+  <!-- Suite Navigation Bar -->
+  <div style="background:rgba(11, 16, 25, 0.95);border-bottom:1px solid rgba(255,255,255,0.08);padding:8px 20px;display:flex;justify-content:space-between;align-items:center;font-size:12px;backdrop-filter:blur(8px);position:sticky;top:0;z-index:90;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <a href="../index.html" style="color:var(--gold);text-decoration:none;font-weight:700;display:flex;align-items:center;gap:6px;">
+        <span>⚡ SLEEPER ANALYTICS SUITE</span>
+      </a>
+      <span style="color:var(--muted);">&bull;</span>
+      <span style="color:var(--text);font-weight:600;">Waiver Wire Radar</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <a href="../index.html" style="color:var(--muted);text-decoration:none;padding:3px 8px;border-radius:4px;border:1px solid var(--border);transition:all 0.15s;">◄ Portal Home</a>
+      <a href="../draft/index.html" style="color:var(--accent);text-decoration:none;padding:3px 8px;border-radius:4px;border:1px solid var(--accent);background:rgba(79,209,165,0.08);transition:all 0.15s;">Draft War Room ➔</a>
+      <a href="../weekly/index.html" style="color:#fbbf24;text-decoration:none;padding:3px 8px;border-radius:4px;border:1px solid #fbbf24;background:rgba(251,191,36,0.08);transition:all 0.15s;">Weekly Optimizer ➔</a>
+    </div>
+  </div>
+
+  <!-- Setup / Connect Modal -->
+  <div id="setupModal" style="position:fixed;inset:0;background:rgba(10,15,26,0.85);backdrop-filter:blur(10px);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;">
+    <div class="card" style="max-width:480px;width:100%;background:rgba(18,24,38,0.96);border:1px solid rgba(234,179,8,0.35);padding:24px;border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,0.6);">
+      
+      <!-- Mascot Modal Hero -->
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px;background:rgba(28,37,55,0.8);border:1px solid rgba(234,179,8,0.25);border-radius:10px;padding:12px 14px;">
+        <img src="../assets/scout-bowie.webp" style="width:54px;height:54px;border-radius:50%;object-fit:cover;object-position:50% 12%;border:2px solid var(--gold);" alt="Bowie" onerror="this.onerror=null; this.src='../Bowie.jpg';">
+        <div>
+          <div style="font-weight:800;font-size:14px;color:var(--gold);">Scout Bowie Radar</div>
+          <div style="font-size:12px;color:var(--text);margin-top:2px;">"Diffing league rosters to find high-value free agents, streaming targets, and safe bench drops!" 🐾</div>
+        </div>
+      </div>
+
+      <!-- Setup Tabs -->
+      <div style="display:flex;gap:6px;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;">
+        <button id="tabLeagueBtn" class="filter-pill active" onclick="switchSetupTab('league')">Sleeper League</button>
+        <button id="tabSampleBtn" class="filter-pill" onclick="switchSetupTab('sample')">Sample League (Demo)</button>
+      </div>
+
+      <!-- Tab 1: Live League Input -->
+      <div id="tabLeagueContent">
+        <p style="color:var(--muted);font-size:12px;margin:0 0 12px;">Enter your Sleeper Username or League ID to scan unowned players against your current roster.</p>
+        <input type="text" id="sleeperInput" class="waiver-search-input" style="width:100%;box-sizing:border-box;margin-bottom:12px;padding:8px 12px;font-size:13px;" placeholder="e.g. username or League ID" onkeydown="if(event.key==='Enter') onFetchLeagues()">
+        <button class="card-btn" style="background:var(--accent);color:#0f172a;font-weight:700;width:100%;" onclick="onFetchLeagues()">Scan Free Agent Pool ➔</button>
+
+        <div id="leagueSelectGroup" style="display:none;margin-top:12px;">
+          <label style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:700;">Select League</label>
+          <select id="leagueDropdown" class="waiver-sort-select" style="width:100%;margin-top:4px;" onchange="onSelectLeague()"></select>
+        </div>
+
+        <div id="teamSelectGroup" style="display:none;margin-top:12px;">
+          <label style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:700;">Select Your Team</label>
+          <select id="teamDropdown" class="waiver-sort-select" style="width:100%;margin-top:4px;"></select>
+        </div>
+
+        <button id="launchWaiverBtn" class="card-btn" style="display:none;margin-top:14px;background:#eab308;color:#0f172a;font-weight:800;width:100%;" onclick="initWaiverFromSelection()">Launch Waiver Radar ➔</button>
+      </div>
+
+      <!-- Tab 2: Sample Demo -->
+      <div id="tabSampleContent" style="display:none;">
+        <p style="color:var(--muted);font-size:12.5px;line-height:1.4;margin:0 0 14px;">
+          Explore a simulated 12-team Half-PPR free agent pool featuring breakout targets, DEF streamers, and high-upside handcuffs paired with your sample bench.
+        </p>
+        <button class="card-btn" style="background:#eab308;color:#0f172a;font-weight:800;width:100%;" onclick="loadSampleWaiverPool()">Explore Sample Waiver Wire ➔</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Main Application Container -->
+  <div class="wrap" id="mainApp" style="display:none;">
+
+    <!-- Mascot Header Banner -->
+    <div class="mascot-header-card bowie-header-banner" style="margin-bottom:16px;">
+      <div class="mascot-avatar-wrap bowie-avatar-container" onclick="triggerBowieEasterEgg(this.querySelector('img'))">
+        <img src="../assets/scout-bowie.webp" class="mascot-avatar bowie-avatar-img" alt="Bowie" onerror="this.onerror=null; this.src='../Bowie.jpg';">
+      </div>
+      <div style="flex:1;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:14px;font-weight:800;color:var(--gold);">Scout Bowie</span>
+            <span class="waiver-badge badge-golden-bone">CHIEF RADAR SCOUT</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="faab-budget-pill" title="Click to adjust your remaining FAAB budget">
+              <span>FAAB Budget: $</span>
+              <input type="number" id="userFaabInput" class="faab-input-edit" value="100" min="0" max="1000" onchange="onFaabBudgetChanged()">
+            </div>
+            <button class="btn-copy-claims" onclick="openSetupModal()" style="padding:3px 10px;font-size:11px;">Change League</button>
+          </div>
+        </div>
+        <div id="bowieRadarTip" style="font-size:12.5px;color:var(--text);margin-top:4px;line-height:1.4;">
+          "Scanning available free agents against your bench. Prioritizing positive net projection upgrades and streaming advantages." 🐾
+        </div>
+      </div>
+    </div>
+
+    <!-- Matchup Title Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <h1 id="leagueTitle" style="font-size:20px;font-weight:800;margin:0 0 2px;">Waiver Wire Radar</h1>
+        <div id="leagueSub" style="font-size:12px;color:var(--muted);">Analyzing free agents and net roster upgrades...</div>
+      </div>
+      <button id="btnCopyClaims" class="btn-copy-claims" onclick="copyClaimPriorityList()">
+        <span>📋 Copy Waiver Priority List</span>
+      </button>
+    </div>
+
+    <!-- Filter & Sort Toolbar -->
+    <div class="waiver-toolbar">
+      <div class="filter-pills-group" id="filterPillsGroup">
+        <button class="filter-pill active" data-filter="all" onclick="onFilterCategory('all')">All Available</button>
+        <button class="filter-pill" data-filter="upgrade" onclick="onFilterCategory('upgrade')">⚡ Top Upgrades</button>
+        <button class="filter-pill" data-filter="streamer" onclick="onFilterCategory('streamer')">🛡️ Streamers</button>
+        <button class="filter-pill" data-filter="handcuff" onclick="onFilterCategory('handcuff')">🔥 High-Upside Handcuffs</button>
+        <button class="filter-pill" data-filter="QB" onclick="onFilterCategory('QB')">QB</button>
+        <button class="filter-pill" data-filter="RB" onclick="onFilterCategory('RB')">RB</button>
+        <button class="filter-pill" data-filter="WR" onclick="onFilterCategory('WR')">WR</button>
+        <button class="filter-pill" data-filter="TE" onclick="onFilterCategory('TE')">TE</button>
+        <button class="filter-pill" data-filter="K" onclick="onFilterCategory('K')">K</button>
+        <button class="filter-pill" data-filter="DEF" onclick="onFilterCategory('DEF')">DEF</button>
+      </div>
+
+      <div class="toolbar-actions">
+        <input type="text" id="waiverSearch" class="waiver-search-input" placeholder="Search player/team..." oninput="onSearchInput()">
+        <select id="waiverSort" class="waiver-sort-select" onchange="onSortChanged()">
+          <option value="delta_desc">Sort: Net Upgrade (High to Low)</option>
+          <option value="proj_desc">Sort: Projected Points</option>
+          <option value="faab_desc">Sort: FAAB Priority</option>
+          <option value="handcuff_desc">Sort: Contingent Upside</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Waiver Cards List -->
+    <div id="waiverCardsList" class="waiver-cards-container">
+      <div class="waiver-empty-state">Loading free agent radar...</div>
+    </div>
+
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="bowieToast" style="position:fixed;bottom:24px;right:24px;z-index:300;display:flex;align-items:flex-end;gap:10px;transform:translateY(140px);opacity:0;transition:all 0.35s cubic-bezier(0.175,0.885,0.32,1.275);pointer-events:none;">
+    <div class="card" id="bowieToastMsg" style="background:rgba(22,29,43,0.95);border:1px solid rgba(234,179,8,0.4);color:#fff;padding:10px 14px;border-radius:10px;font-size:12px;max-width:280px;box-shadow:0 10px 25px rgba(0,0,0,0.5);">Bowie alert!</div>
+    <img src="../assets/scout-bowie.webp" style="width:40px;height:40px;border-radius:50%;border:2px solid var(--gold);object-fit:cover;object-position:50% 12%;flex-shrink:0;" alt="Bowie" onerror="this.onerror=null; this.src='../Bowie.jpg';">
+  </div>
+
+  <!-- Application Logic Module -->
+  <script type="module" src="./waiver-app.js?v=1.0.0"></script>
+</body>
+</html>

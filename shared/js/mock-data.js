@@ -689,3 +689,142 @@ export const MOCK_MATCHUPS = [
     points: 0
   }
 ];
+
+export const MOCK_FREE_AGENTS_DB = {
+  "fa_khalil_shakir": {
+    player_id: "fa_khalil_shakir",
+    full_name: "Khalil Shakir",
+    first_name: "Khalil",
+    last_name: "Shakir",
+    position: "WR",
+    team: "BUF",
+    opponent: "vs ARI",
+    projected_pts: 12.8,
+    projected_points: 12.8,
+    status: "Active",
+    avatar: "https://sleepercdn.com/content/nfl/players/thumb/8138.jpg"
+  },
+  "fa_trey_benson": {
+    player_id: "fa_trey_benson",
+    full_name: "Trey Benson",
+    first_name: "Trey",
+    last_name: "Benson",
+    position: "RB",
+    team: "ARI",
+    opponent: "@ BUF",
+    projected_pts: 8.6,
+    projected_points: 8.6,
+    status: "Active",
+    avatar: "https://sleepercdn.com/content/nfl/players/thumb/11560.jpg"
+  },
+  "fa_chuba_hubbard": {
+    player_id: "fa_chuba_hubbard",
+    full_name: "Chuba Hubbard",
+    first_name: "Chuba",
+    last_name: "Hubbard",
+    position: "RB",
+    team: "CAR",
+    opponent: "@ NO",
+    projected_pts: 11.8,
+    projected_points: 11.8,
+    status: "Active",
+    avatar: "https://sleepercdn.com/content/nfl/players/thumb/7564.jpg"
+  },
+  "fa_demarcus_robinson": {
+    player_id: "fa_demarcus_robinson",
+    full_name: "Demarcus Robinson",
+    first_name: "Demarcus",
+    last_name: "Robinson",
+    position: "WR",
+    team: "LAR",
+    opponent: "@ DET",
+    projected_pts: 10.6,
+    projected_points: 10.6,
+    status: "Active",
+    avatar: "https://sleepercdn.com/content/nfl/players/thumb/3199.jpg"
+  },
+  "fa_colby_parkinson": {
+    player_id: "fa_colby_parkinson",
+    full_name: "Colby Parkinson",
+    first_name: "Colby",
+    last_name: "Parkinson",
+    position: "TE",
+    team: "LAR",
+    opponent: "@ DET",
+    projected_pts: 9.4,
+    projected_points: 9.4,
+    status: "Active",
+    avatar: "https://sleepercdn.com/content/nfl/players/thumb/6826.jpg"
+  },
+  "fa_bucs_def": {
+    player_id: "fa_bucs_def",
+    full_name: "Tampa Bay Buccaneers",
+    first_name: "Tampa Bay",
+    last_name: "Buccaneers",
+    position: "DEF",
+    team: "TB",
+    opponent: "vs WAS",
+    projected_pts: 8.8,
+    projected_points: 8.8,
+    status: "Active",
+    avatar: "https://sleepercdn.com/images/v2/icons/player_default.webp"
+  },
+  "fa_seahawks_def": {
+    player_id: "fa_seahawks_def",
+    full_name: "Seattle Seahawks",
+    first_name: "Seattle",
+    last_name: "Seahawks",
+    position: "DEF",
+    team: "SEA",
+    opponent: "vs DEN",
+    projected_pts: 8.4,
+    projected_points: 8.4,
+    status: "Active",
+    avatar: "https://sleepercdn.com/images/v2/icons/player_default.webp"
+  },
+  "fa_sam_darnold": {
+    player_id: "fa_sam_darnold",
+    full_name: "Sam Darnold",
+    first_name: "Sam",
+    last_name: "Darnold",
+    position: "QB",
+    team: "MIN",
+    opponent: "@ NYG",
+    projected_pts: 16.2,
+    projected_points: 16.2,
+    status: "Active",
+    avatar: "https://sleepercdn.com/content/nfl/players/thumb/4981.jpg"
+  },
+  "fa_matt_prater": {
+    player_id: "fa_matt_prater",
+    full_name: "Matt Prater",
+    first_name: "Matt",
+    last_name: "Prater",
+    position: "K",
+    team: "ARI",
+    opponent: "@ BUF",
+    projected_pts: 8.2,
+    projected_points: 8.2,
+    status: "Active",
+    avatar: "https://sleepercdn.com/content/nfl/players/thumb/prater.jpg"
+  },
+  "fa_ray_davis": {
+    player_id: "fa_ray_davis",
+    full_name: "Ray Davis",
+    first_name: "Ray",
+    last_name: "Davis",
+    position: "RB",
+    team: "BUF",
+    opponent: "vs ARI",
+    projected_pts: 7.4,
+    projected_points: 7.4,
+    status: "Active",
+    avatar: "https://sleepercdn.com/content/nfl/players/thumb/11565.jpg"
+  }
+};
+
+export const MOCK_MASTER_PLAYERS_POOL = {
+  ...MOCK_PLAYERS_DB,
+  ...MOCK_FREE_AGENTS_DB
+};
+
