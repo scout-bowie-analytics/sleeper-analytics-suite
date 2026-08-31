@@ -1104,6 +1104,7 @@
         <div class="live-indicator">
           <span class="pulse-dot"></span> <span id="simPerfText">10k SIMS READY</span>
         </div>
+        <button id="btnGuidedTour" class="btn-guided-tour" onclick="window.startGuidedTour()" title="Start Scout Bowie Guided Feature Tour">🧭 Guided Tour</button>
         <button class="reset-btn" onclick="openSetupModal()">Change Matchup</button>
       </div>
     </div>
@@ -1294,6 +1295,8 @@
 
   </div>
 
+  <!-- Guided Feature Tour Engine -->
+  <script src="./guided-tour.js?v=5.9.0"></script>
   <!-- Weekly Lineup App Logic (with cache-busting) -->
   <script type="module" src="./weekly-app.js?v=5.9.0"></script>
 </body>

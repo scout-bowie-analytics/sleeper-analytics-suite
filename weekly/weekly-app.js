@@ -549,6 +549,16 @@ class WeeklyOptimizerController {
     await this.loadMatchupData(this.state.currentLeague, 1, 1);
     this.closeSetupModal();
     this.showToast('🏆 Loaded Sample Championship (Pre-Kickoff Optimizer View)! 🐾');
+
+    // Auto-launch Guided Feature Tour on first-time sample exploration
+    setTimeout(() => {
+      try {
+        const tourSeen = localStorage.getItem('scout_bowie_sample_tour_seen');
+        if (!tourSeen && window.scoutBowieTour) {
+          window.scoutBowieTour.start(0);
+        }
+      } catch (e) {}
+    }, 600);
   }
 
   async initDemoMatchup() {
