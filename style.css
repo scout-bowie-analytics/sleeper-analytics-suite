@@ -1,0 +1,334 @@
+﻿/* ==========================================================================
+   SLEEPER ANALYTICS SUITE - PORTAL STYLES (style.css)
+   ========================================================================= */
+
+.portal-wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 40px 20px 80px;
+}
+
+.portal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: .4px;
+  margin: 0;
+  color: #fff;
+}
+
+.brand-tag {
+  background: rgba(79, 209, 165, 0.12);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: .5px;
+}
+
+/* ==========================================================================
+   SCOUT BOWIE MASCOT HEADER BANNER
+   ========================================================================== */
+
+.mascot-header-card, .bowie-header-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 14px 20px;
+  border-radius: 14px;
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, rgba(26, 35, 52, 0.95), rgba(18, 25, 38, 0.95));
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  position: relative;
+  overflow: hidden;
+}
+
+.mascot-avatar-wrap, .bowie-avatar-container {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  border-radius: 50%;
+  border: 2px solid #f59e0b;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1e293b;
+  flex-shrink: 0;
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.25);
+  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.25s ease;
+}
+
+.mascot-avatar-wrap:hover, .bowie-avatar-container:hover {
+  transform: scale(1.06) rotate(-3deg);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+}
+
+.mascot-avatar, .bowie-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 12%;
+  display: block;
+}
+
+.mascot-speech-bubble, .bowie-speech-box {
+  background: rgba(28, 37, 55, 0.9);
+  border: 1px solid var(--border-bright);
+  border-radius: 10px;
+  padding: 10px 14px;
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ==========================================================================
+   DUAL LAUNCH CARDS & INTERACTIVE ERGONOMICS
+   ========================================================================== */
+
+.launch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  margin-top: 32px;
+}
+
+@media (max-width: 780px) {
+  .launch-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.launch-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px 28px 24px;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.launch-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  transition: opacity 0.2s ease;
+}
+
+.launch-card.card-draft::before {
+  background: linear-gradient(90deg, #0d9488, #2dd4bf);
+}
+
+.launch-card.card-weekly::before {
+  background: linear-gradient(90deg, #d97706, #fbbf24);
+}
+
+.launch-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.5);
+}
+
+.launch-card.card-draft:hover {
+  border-color: rgba(45, 212, 191, 0.45);
+  box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.55), 0 0 24px rgba(13, 148, 136, 0.25);
+}
+
+.launch-card.card-weekly:hover {
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.55), 0 0 24px rgba(217, 119, 6, 0.25);
+}
+
+.card-top {
+  margin-bottom: 24px;
+}
+
+.card-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  font-size: 22px;
+  margin-bottom: 16px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+}
+
+.card-title {
+  font-size: 19px;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-subtext {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin: 0 0 20px;
+}
+
+.card-feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.card-feature-item {
+  font-size: 12.5px;
+  color: var(--text);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.45;
+}
+
+.card-feature-item .feature-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  margin-top: 1px;
+}
+
+.card-feature-item strong {
+  color: #fff;
+  font-weight: 700;
+}
+
+/* Action Button Upgrade & CTA Footer (Strict Horizontal Button Alignment) */
+.card-footer-cta {
+  margin-top: auto;
+  padding-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.card-btn {
+  width: 100%;
+  padding: 0.65rem 1.25rem;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  transition: background 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease;
+  box-sizing: border-box;
+}
+
+.btn-draft {
+  background: #0d9488;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.35);
+}
+
+.btn-draft:hover {
+  background: #0f766e;
+  box-shadow: 0 6px 18px rgba(13, 148, 136, 0.5);
+}
+
+.btn-weekly {
+  background: #d97706;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.35);
+}
+
+.btn-weekly:hover {
+  background: #b45309;
+  box-shadow: 0 6px 18px rgba(217, 119, 6, 0.5);
+}
+
+.demo-link, .demo-link-spacer {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  min-height: 20px;
+  line-height: 1.2;
+}
+
+.demo-link:hover {
+  color: var(--gold);
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   SYSTEM STATUS FOOTER
+   ========================================================================== */
+
+.system-status-panel {
+  margin-top: 36px;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: rgba(22, 29, 43, 0.45);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-item strong {
+  color: var(--text);
+}

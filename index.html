@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sleeper Analytics Suite | Scout Bowie HQ</title>
+  <link rel="icon" type="image/webp" href="assets/scout-bowie.webp">
+  <link rel="stylesheet" href="shared/css/sleeper-theme.css">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph & Social Cards -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Sleeper Analytics Suite | Scout Bowie HQ">
+  <meta property="og:description" content="Real-time fantasy analytics, live draft companion, and 10,000-run Monte Carlo weekly lineup optimizer powered by Scout Bowie.">
+  <meta property="og:image" content="assets/scout-bowie.webp">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Sleeper Analytics Suite | Scout Bowie HQ">
+  <meta name="twitter:description" content="Real-time fantasy analytics, live draft companion, and 10,000-run Monte Carlo weekly lineup optimizer powered by Scout Bowie.">
+  <meta name="twitter:image" content="assets/scout-bowie.webp">
+  
+  <!-- GoatCounter Web Analytics -->
+  <script data-goatcounter="https://bowies-fantasy-football-toolbox.goatcounter.com/count"
+          async src="//gc.zgo.at/count.js"></script>
+
+  <style>
+    .portal-wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+    }
+
+    .portal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: .4px;
+      margin: 0;
+      color: #fff;
+    }
+
+    .brand-tag {
+      background: rgba(79, 209, 165, 0.12);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: .5px;
+    }
+
+    /* Dual Launch Cards & Interactive Ergonomics */
+    .launch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      margin-top: 32px;
+    }
+
+    @media (max-width: 780px) {
+      .launch-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .launch-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px 28px 24px;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .launch-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      transition: opacity 0.2s ease;
+    }
+
+    .launch-card.card-draft::before {
+      background: linear-gradient(90deg, #0d9488, #2dd4bf);
+    }
+
+    .launch-card.card-weekly::before {
+      background: linear-gradient(90deg, #d97706, #fbbf24);
+    }
+
+    .launch-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.5);
+    }
+
+    .launch-card.card-draft:hover {
+      border-color: rgba(45, 212, 191, 0.45);
+      box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.55), 0 0 24px rgba(13, 148, 136, 0.25);
+    }
+
+    .launch-card.card-weekly:hover {
+      border-color: rgba(245, 158, 11, 0.45);
+      box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.55), 0 0 24px rgba(217, 119, 6, 0.25);
+    }
+
+    .card-top {
+      margin-bottom: 24px;
+    }
+
+    .card-icon-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      font-size: 22px;
+      margin-bottom: 16px;
+      background: var(--panel2);
+      border: 1px solid var(--border);
+    }
+
+    .card-title {
+      font-size: 19px;
+      font-weight: 800;
+      color: #fff;
+      margin: 0 0 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-subtext {
+      color: var(--muted);
+      font-size: 13.5px;
+      line-height: 1.5;
+      margin: 0 0 20px;
+    }
+
+    .card-feature-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .card-feature-item {
+      font-size: 12.5px;
+      color: var(--text);
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      line-height: 1.45;
+    }
+
+    .card-feature-item .feature-icon {
+      flex-shrink: 0;
+      font-size: 13px;
+      margin-top: 1px;
+    }
+
+    .card-feature-item strong {
+      color: #fff;
+      font-weight: 700;
+    }
+
+    /* Action Button Upgrade & CTA Footer */
+    .card-footer-cta {
+      margin-top: auto;
+      padding-top: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .card-btn {
+      width: 100%;
+      padding: 0.65rem 1.25rem;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+      transition: background 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease;
+      box-sizing: border-box;
+    }
+
+    .btn-draft {
+      background: #0d9488;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(13, 148, 136, 0.35);
+    }
+
+    .btn-draft:hover {
+      background: #0f766e;
+      box-shadow: 0 6px 18px rgba(13, 148, 136, 0.5);
+    }
+
+    .btn-weekly {
+      background: #d97706;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(217, 119, 6, 0.35);
+    }
+
+    .btn-weekly:hover {
+      background: #b45309;
+      box-shadow: 0 6px 18px rgba(217, 119, 6, 0.5);
+    }
+
+    .demo-link, .demo-link-spacer {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 4px;
+      min-height: 20px;
+      line-height: 1.2;
+    }
+
+    .demo-link:hover {
+      color: var(--gold);
+      text-decoration: underline;
+    }
+
+    /* System Status Bar */
+    .system-status-panel {
+      margin-top: 36px;
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: rgba(22, 29, 43, 0.45);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-item strong {
+      color: var(--text);
+    }
+
+    /* Scout Bowie Mascot Header Banner */
+    .mascot-header-card, .bowie-header-banner {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 14px 20px;
+      border-radius: 14px;
+      margin-bottom: 24px;
+      background: linear-gradient(135deg, rgba(26, 35, 52, 0.95), rgba(18, 25, 38, 0.95));
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .mascot-avatar-wrap, .bowie-avatar-container {
+      width: 56px;
+      height: 56px;
+      min-width: 56px;
+      border-radius: 50%;
+      border: 2px solid #f59e0b;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1e293b;
+      flex-shrink: 0;
+      cursor: pointer;
+      position: relative;
+      box-shadow: 0 0 16px rgba(245, 158, 11, 0.25);
+      transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.25s ease;
+    }
+
+    .mascot-avatar-wrap:hover, .bowie-avatar-container:hover {
+      transform: scale(1.06) rotate(-3deg);
+      box-shadow: 0 0 20px rgba(245, 158, 11, 0.4);
+    }
+
+    .mascot-avatar, .bowie-avatar-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: 50% 12%;
+      display: block;
+    }
+
+    .mascot-speech-bubble, .bowie-speech-box {
+      background: rgba(28, 37, 55, 0.9);
+      border: 1px solid var(--border-bright);
+      border-radius: 10px;
+      padding: 10px 14px;
+      position: relative;
+      flex: 1;
+      min-width: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="portal-wrap">
+
+    <!-- Top Navigation Header -->
+    <header class="portal-header">
+      <div class="brand-group">
+        <h1 class="brand-title">Sleeper Analytics Suite</h1>
+        <span class="brand-tag">v2.5</span>
+      </div>
+      <div class="live-indicator">
+        <span class="pulse-dot"></span> <span>SLEEPER API CONNECTED</span>
+      </div>
+    </header>
+
+    <!-- Scout Bowie Mascot Welcoming Hero Card -->
+    <div class="mascot-header-card bowie-header-banner">
+      <div class="mascot-avatar-wrap bowie-avatar-container" onclick="triggerBowieEasterEgg(this.querySelector('img'))">
+        <img src="assets/scout-bowie.webp" class="mascot-avatar bowie-avatar-img" alt="Scout Bowie" onerror="this.onerror=null; this.src='Bowie.jpg';">
+      </div>
+      <div class="mascot-speech-bubble bowie-speech-box">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:4px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:15px;font-weight:800;color:var(--gold);">Scout Bowie</span>
+            <span style="font-size:10px;background:rgba(241,196,15,0.18);color:var(--gold);padding:1px 6px;border-radius:4px;border:1px solid rgba(241,196,15,0.35);font-weight:800;">Chief War Room Mascot</span>
+          </div>
+          <span style="font-size:11px;color:var(--muted);cursor:pointer;" onclick="triggerBowieEasterEgg(document.querySelector('.mascot-avatar, .bowie-avatar-img'))">👉 Click my face for scouting takes!</span>
+        </div>
+        <div id="bowieGreeting" style="font-size:12.5px;color:var(--text);font-weight:500;line-height:1.4;">
+          "Welcome to our quantitative fantasy headquarters! Choose a tool below to run live draft war-room picks or 10,000-run Monte Carlo weekly lineup simulations." 🐾
+        </div>
+      </div>
+    </div>
+
+    <!-- Dual Launch Cards Grid -->
+    <div class="launch-grid">
+
+      <!-- Card 1: Live Draft Companion -->
+      <div class="launch-card card-draft" onclick="window.location.href='draft/index.html'">
+        <div class="card-top">
+          <div class="card-icon-badge" style="border-color: rgba(13, 148, 136, 0.4); color: #2dd4bf;">
+            🎯
+          </div>
+          <div class="card-title">
+            <span>Live Draft Companion</span>
+            <span class="golden-bone-badge" style="background: rgba(13, 148, 136, 0.18); border-color: #2dd4bf; color: #2dd4bf;">
+              WAR ROOM
+            </span>
+          </div>
+          <p class="card-subtext">
+            Real-time CDF reach probabilities, positional cliff alerts, dynamic BPA/Need strategy, and live Sleeper board sync.
+          </p>
+
+          <ul class="card-feature-list">
+            <li class="card-feature-item">
+              <span class="feature-icon">⚡</span>
+              <span><strong>Live Sleeper Sync</strong> — Auto-tracks picks, keepers, and traded draft capital.</span>
+            </li>
+            <li class="card-feature-item">
+              <span class="feature-icon">📈</span>
+              <span><strong>Monte Carlo Reach Probability</strong> — Real-time CDF odds of players lasting to your next turn.</span>
+            </li>
+            <li class="card-feature-item">
+              <span class="feature-icon">⚠️</span>
+              <span><strong>Positional Cliff Warnings</strong> — Scarcity alerts before elite tier drop-offs.</span>
+            </li>
+            <li class="card-feature-item">
+              <span class="feature-icon">🎯</span>
+              <span><strong>Dynamic BPA vs. Need Dial</strong> — Adaptive value weight calibrated to your roster.</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card-footer-cta">
+          <a href="draft/index.html" class="card-btn btn-draft" onclick="event.stopPropagation()">
+            Launch Draft Companion ➔
+          </a>
+          <span class="demo-link demo-link-spacer" aria-hidden="true" style="visibility: hidden; user-select: none;">&nbsp;</span>
+        </div>
+      </div>
+
+      <!-- Card 2: Weekly Lineup Optimizer -->
+      <div class="launch-card card-weekly" onclick="window.location.href='weekly/index.html'">
+        <div class="card-top">
+          <div class="card-icon-badge" style="border-color: rgba(217, 119, 6, 0.4); color: #fbbf24;">
+            📈
+          </div>
+          <div class="card-title">
+            <span>Weekly Lineup Optimizer</span>
+            <span class="golden-bone-badge">LINEUP LAB</span>
+          </div>
+          <p class="card-subtext">
+            10,000-run Monte Carlo win probability, right-skewed point distributions, Floor vs. Ceiling dials, and Scout Bowie matchup alerts.
+          </p>
+
+          <ul class="card-feature-list">
+            <li class="card-feature-item">
+              <span class="feature-icon">🎲</span>
+              <span><strong>10,000-Trial Matchup Simulations</strong> — Distribution curves for true win probability.</span>
+            </li>
+            <li class="card-feature-item">
+              <span class="feature-icon">📊</span>
+              <span><strong>Floor vs. Ceiling Strategy Dials</strong> — Optimize for safe points or high-variance boom.</span>
+            </li>
+            <li class="card-feature-item">
+              <span class="feature-icon">🚨</span>
+              <span><strong>Scout Bowie Alert Engine</strong> — Real-time wind spikes, injury traps, and pivot locks.</span>
+            </li>
+            <li class="card-feature-item">
+              <span class="feature-icon">🔴</span>
+              <span><strong>Live Gameday Tracking</strong> — Dynamic in-flight win odds as games progress.</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card-footer-cta">
+          <a href="weekly/index.html" class="card-btn btn-weekly" onclick="event.stopPropagation()">
+            Launch Lineup Optimizer ➔
+          </a>
+          <a href="weekly/index.html?sample=true" class="demo-link" onclick="event.stopPropagation()">
+            or Explore Sample Matchup →
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- System Status Bar -->
+    <div class="system-status-panel">
+      <div class="status-item">
+        <span>⚡ Quantitative Engine: <strong>10K Monte Carlo v2.5</strong></span>
+      </div>
+      <div class="status-item">
+        <span>🐾 Chief Quantitative Scout: <strong>Bowie</strong></span>
+      </div>
+      <div class="status-item">
+        <span>🏈 Data Source: <strong>Sleeper Public API</strong></span>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const bowieQuotes = [
+      "\"Never fear high variance when the math is on your side! Sniffing out league-winning value.\" 🐾",
+      "\"Drafting or setting lineups? Let's avoid brutal tier cliffs and lock down the championship!\" 🐾",
+      "\"I've crunched 10,000 iterations in my quantum canine processor. Ready whenever you are!\" 🐾",
+      "\"Golden bones for elite floors, bark warnings for risky traps! Let's get that win.\" 🐾"
+    ];
+
+    function triggerBowieEasterEgg(el) {
+      if (!el) return;
+      el.classList.remove('wiggle');
+      void el.offsetWidth;
+      el.classList.add('wiggle');
+
+      const greetingEl = document.getElementById('bowieGreeting');
+      if (greetingEl) {
+        const quote = bowieQuotes[Math.floor(Math.random() * bowieQuotes.length)];
+        greetingEl.textContent = quote;
+      }
+    }
+  </script>
+</body>
+</html>

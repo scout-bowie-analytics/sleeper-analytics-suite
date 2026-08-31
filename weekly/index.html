@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weekly Lineup Optimizer | Sleeper Analytics Suite</title>
+  <link rel="icon" type="image/webp" href="../assets/scout-bowie.webp">
+  <link rel="stylesheet" href="../shared/css/sleeper-theme.css">
+  <link rel="stylesheet" href="./styles.css?v=5.9.0">
+
+  <!-- Open Graph & Social Cards -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Weekly Lineup Optimizer | Sleeper Analytics Suite">
+  <meta property="og:description" content="Real-time fantasy analytics, live draft companion, and 10,000-run Monte Carlo weekly lineup optimizer powered by Scout Bowie.">
+  <meta property="og:image" content="../assets/scout-bowie.webp">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Weekly Lineup Optimizer | Sleeper Analytics Suite">
+  <meta name="twitter:description" content="Real-time fantasy analytics, live draft companion, and 10,000-run Monte Carlo weekly lineup optimizer powered by Scout Bowie.">
+  <meta name="twitter:image" content="../assets/scout-bowie.webp">
+  
+  <!-- GoatCounter Web Analytics -->
+  <script data-goatcounter="https://bowies-fantasy-football-toolbox.goatcounter.com/count"
+          async src="//gc.zgo.at/count.js"></script>
+
+  <script>
+    // Global fallback bindings
+    window.onFetchLeagues = function() { window.weeklyOptimizer && window.weeklyOptimizer.onFetchLeagues(); };
+    window.onSelectLeague = function() { window.weeklyOptimizer && window.weeklyOptimizer.onSelectLeague(); };
+    window.initMatchupFromSelection = function() { window.weeklyOptimizer && window.weeklyOptimizer.initMatchupFromSelection(); };
+    window.initDemoMatchup = function() { window.weeklyOptimizer && window.weeklyOptimizer.initDemoMatchup(); };
+    window.switchSetupTab = function(t) { window.weeklyOptimizer && window.weeklyOptimizer.switchSetupTab(t); };
+    window.openSetupModal = function() { window.weeklyOptimizer && window.weeklyOptimizer.openSetupModal(); };
+    window.closeDrawer = function() { window.weeklyOptimizer && window.weeklyOptimizer.closeDrawer(); };
+    window.openPlayerDrawer = function(id) { window.weeklyOptimizer && window.weeklyOptimizer.openPlayerDrawer(id); };
+    window.onStrategyChange = function(v) { window.weeklyOptimizer && window.weeklyOptimizer.onStrategyChange(v); };
+    window.onStrategyModeChange = function(mode) { window.weeklyOptimizer && window.weeklyOptimizer.onStrategyModeChange(mode); };
+    window.applyOptimalLineup = function() { window.weeklyOptimizer && window.weeklyOptimizer.applyOptimalLineup(); };
+    window.onStarterDropdownChange = function(idx, val) { window.weeklyOptimizer && window.weeklyOptimizer.onStarterDropdownChange(idx, val); };
+    window.triggerBowieEasterEgg = function(el) { window.weeklyOptimizer && window.weeklyOptimizer.triggerBowieEasterEgg(el); };
+    window.openAlertsModal = function() { window.weeklyOptimizer && window.weeklyOptimizer.openAlertsModal(); };
+    window.closeAlertsModal = function() { window.weeklyOptimizer && window.weeklyOptimizer.closeAlertsModal(); };
+    window.saveAlertPreferences = function() { window.weeklyOptimizer && window.weeklyOptimizer.saveAlertPreferences(); };
+    window.testDiscordWebhook = function() { window.weeklyOptimizer && window.weeklyOptimizer.testDiscordWebhook(); };
+    window.testEmailNotification = function() { window.weeklyOptimizer && window.weeklyOptimizer.testEmailNotification(); };
+    window.dispatchGamedayAlerts = function() { window.weeklyOptimizer && window.weeklyOptimizer.dispatchGamedayAlerts(); };
+    window.onDiscordInputChanged = function() { window.weeklyOptimizer && window.weeklyOptimizer.onDiscordInputChanged(); };
+    window.onEmailInputChanged = function() { window.weeklyOptimizer && window.weeklyOptimizer.onEmailInputChanged(); };
+    window.importRawMatchupJson = function() { window.weeklyOptimizer && window.weeklyOptimizer.importRawMatchupJson(); };
+  </script>
+
+  <style>
+    /* Global safe image constraints */
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* Specific styles for Weekly Lineup Optimizer using repo design system */
+    .optimizer-scoreboard {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 16px;
+      align-items: center;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      backdrop-filter: blur(8px);
+    }
+
+    @media (max-width: 768px) {
+      .optimizer-scoreboard {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+    }
+
+    .team-display {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .team-avatar-img {
+      width: 52px;
+      height: 52px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border-bright);
+      background: var(--panel2);
+      object-fit: cover;
+    }
+
+    .team-details h3 {
+      margin: 0 0 2px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .team-details .pts-large {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -.5px;
+    }
+
+    .gauge-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 220px;
+    }
+
+    .win-prob-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .win-prob-number {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -.5px;
+      margin: 2px 0;
+    }
+
+    .meter-track {
+      width: 100%;
+      height: 7px;
+      background: var(--panel2);
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 4px 0 8px;
+      border: 1px solid var(--border);
+    }
+
+    .meter-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--gold));
+      border-radius: 4px;
+      transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .spread-pill {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      background: var(--panel2);
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    /* Lineup View Toggle (Your Lineup vs Opponent) */
+    .lineup-view-toggle {
+      display: inline-flex;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      gap: 4px;
+      margin-right: 1rem;
+      padding-right: 1rem;
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .view-pill {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #94a3b8;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .view-pill:hover:not(.active) {
+      color: #e2e8f0;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .view-pill.active {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.1);
+    }
+
+    /* 3-Way Segmented Strategy Control */
+    .strategy-pill-group {
+      display: inline-flex;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      gap: 4px;
+      transition: opacity 0.2s ease;
+    }
+
+    .strategy-pill-group.disabled {
+      pointer-events: none;
+      opacity: 0.4;
+    }
+
+    .strategy-pill {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #94a3b8;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .strategy-pill:hover:not(.active) {
+      color: #e2e8f0;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .strategy-pill.active {
+      background: rgba(0, 229, 255, 0.15);
+      color: #00e5ff;
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.1);
+    }
+
+    /* Gameday Live Pulse & Status Badges */
+    @keyframes livePulseGlow {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .badge-live-pulse {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      padding: 3px 7px;
+      border-radius: 6px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .badge-live-pulse .live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+      animation: livePulseGlow 1.8s infinite;
+    }
+
+    .badge-final {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(148, 163, 184, 0.12);
+      color: #94a3b8;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      padding: 3px 7px;
+      border-radius: 6px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .badge-pts-banked {
+      font-weight: 800;
+      color: #38bdf8;
+      margin-left: 3px;
+    }
+
+    /* Scout Matchup Dossier Badge Pills */
+    .dossier-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      line-height: 1.2;
+    }
+
+    .dossier-pill.lock-pill {
+      background: rgba(234, 179, 8, 0.1);
+      border: 1px solid rgba(234, 179, 8, 0.35);
+      color: #eab308;
+    }
+
+    .dossier-pill.bark-pill, .dossier-pill.trap-pill {
+      background: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.35);
+      color: #f43f5e;
+    }
+
+    .dossier-pill.boom-pill {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #10b981;
+    }
+
+    .dossier-pill.wildcard-pill {
+      background: rgba(168, 85, 247, 0.1);
+      border: 1px solid rgba(168, 85, 247, 0.35);
+      color: #c084fc;
+    }
+
+    /* Swaps Bar */
+    .swaps-alert-banner {
+      background: rgba(241, 196, 15, 0.08);
+      border: 1px solid rgba(241, 196, 15, 0.3);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .swap-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      flex-wrap: wrap;
+    }
+
+    .player-thumb {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: var(--panel2);
+      border: 1px solid var(--border);
+    }
+
+    /* Setup Modal */
+    #setupModal {
+      display: flex;
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 14, 24, 0.88);
+      backdrop-filter: blur(10px);
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      padding: 20px;
+    }
+
+    .setup-card {
+      background: var(--panel);
+      border: 1px solid rgba(241, 196, 15, 0.25);
+      border-radius: 16px;
+      padding: 28px;
+      width: 100%;
+      max-width: 500px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 20px rgba(241, 196, 15, 0.1);
+      backdrop-filter: blur(14px);
+    }
+
+    .modal-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+      align-items: center;
+      background: var(--panel2);
+      padding: 6px;
+      border-radius: 10px;
+      margin-bottom: 18px;
+      border: 1px solid var(--border);
+    }
+
+    .modal-tab, .modal-tab-btn {
+      white-space: nowrap;
+      text-align: center;
+      padding: 0.65rem 0.5rem;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--muted);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .modal-tab.active, .modal-tab-btn.active {
+      background: var(--accent);
+      color: #0e1420;
+      box-shadow: 0 2px 8px rgba(79, 209, 165, 0.2);
+    }
+
+    .beta-tag {
+      font-size: 0.65rem;
+      font-weight: 800;
+      color: #f59e0b;
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      padding: 1px 5px;
+      border-radius: 4px;
+      letter-spacing: 0.03em;
+      line-height: 1;
+    }
+
+    .modal-tab.active .beta-tag, .modal-tab-btn.active .beta-tag {
+      color: #0e1420;
+      background: rgba(14, 20, 32, 0.2);
+      border-color: rgba(14, 20, 32, 0.3);
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 11.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+
+    /* Player Details Drawer */
+    #drawerOverlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(14, 20, 32, 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 150;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    #drawerOverlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #playerDrawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 390px;
+      max-width: 90vw;
+      background: var(--panel);
+      border-left: 1px solid var(--border-bright);
+      box-shadow: -8px 0 24px rgba(0, 0, 0, 0.5);
+      z-index: 160;
+      transform: translateX(100%);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      overflow-y: auto;
+      backdrop-filter: blur(12px);
+    }
+
+    #playerDrawer.active {
+      transform: translateX(0);
+    }
+
+    .drawer-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 22px;
+      cursor: pointer;
+      padding: 4px;
+    }
+
+    .drawer-close:hover {
+      color: var(--text);
+    }
+
+    .drawer-header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 14px;
+      margin-bottom: 16px;
+    }
+
+    .drawer-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .drawer-meta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .drawer-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .drawer-stat {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+
+    .drawer-stat .lbl {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: 0.4px;
+    }
+
+    .drawer-stat .val {
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    /* Modal 3-Tier Grid Layout */
+    .modal-tier-1 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .modal-tier-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .modal-tier-3 {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 14px;
+    }
+
+    .drawer-stat.highlight-card {
+      background: rgba(79, 209, 165, 0.08);
+      border-color: rgba(79, 209, 165, 0.35);
+      box-shadow: 0 0 12px rgba(79, 209, 165, 0.08);
+    }
+
+    .context-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .context-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      font-size: 0.78rem;
+      white-space: nowrap;
+    }
+
+    .context-k {
+      color: #64748b;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .context-v {
+      color: #e2e8f0;
+      font-weight: 600;
+      text-align: right;
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 4px;
+    }
+
+    /* Bowie Toast Reaction */
+    #bowieToast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 200;
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      transform: translateY(140px);
+      opacity: 0;
+      transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      pointer-events: none;
+    }
+
+    #bowieToast.show {
+      transform: translateY(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .toast-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      object-fit: cover;
+      object-position: 50% 12%;
+      border: 2.5px solid var(--gold);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 14px rgba(241, 196, 15, 0.4);
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+
+    .toast-avatar:hover {
+      transform: scale(1.08);
+    }
+
+    /* Scout Banner & Bowie Avatar Upscaling */
+    .scout-banner, .mascot-header-card {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 20px;
+      border-radius: 12px;
+      margin-bottom: 16px;
+      background: rgba(18, 24, 38, 0.95);
+      border: 1px solid rgba(241, 196, 15, 0.3);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4), 0 0 20px rgba(241, 196, 15, 0.12);
+      position: relative;
+      overflow: visible;
+    }
+
+    .scout-avatar-wrapper, .mascot-avatar-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 60px;
+      height: 60px;
+      min-width: 60px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .scout-avatar-img, .mascot-avatar, .scout-avatar {
+      width: 60px;
+      height: 60px;
+      min-width: 60px;
+      border-radius: 50%;
+      object-fit: cover;
+      object-position: 50% 12%;
+      border: 2px solid rgba(234, 179, 8, 0.4);
+      box-shadow: 0 0 12px rgba(234, 179, 8, 0.2);
+      image-rendering: auto;
+      display: block;
+      transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .scout-avatar-wrapper:hover .scout-avatar-img,
+    .mascot-avatar-wrap:hover .mascot-avatar {
+      transform: scale(1.08) rotate(-4deg);
+    }
+
+    .scout-badge, .mascot-badge-tag {
+      position: absolute;
+      bottom: -4px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #eab308;
+      color: #0f172a;
+      font-size: 0.58rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      padding: 1px 6px;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+      z-index: 2;
+      white-space: nowrap;
+    }
+
+    .toast-bubble {
+      background: rgba(22, 29, 43, 0.95);
+      border: 1px solid rgba(241, 196, 15, 0.35);
+      color: var(--text);
+      padding: 12px 16px;
+      border-radius: 14px 14px 2px 14px;
+      font-size: 12.5px;
+      max-width: 300px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 16px rgba(241, 196, 15, 0.15);
+      backdrop-filter: blur(12px);
+      line-height: 1.45;
+    }
+
+    /* Chart Container */
+    .chart-box {
+      height: 240px;
+      position: relative;
+      margin-top: 10px;
+    }
+  </style>
+
+  <!-- Chart.js for Density Distribution Rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- Suite Navigation Bar -->
+  <div style="background:rgba(11, 16, 25, 0.95);border-bottom:1px solid rgba(255,255,255,0.08);padding:8px 20px;display:flex;justify-content:space-between;align-items:center;font-size:12px;backdrop-filter:blur(8px);position:sticky;top:0;z-index:90;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <a href="../index.html" style="color:var(--gold);text-decoration:none;font-weight:700;display:flex;align-items:center;gap:6px;">
+        <span>⚡ SLEEPER ANALYTICS SUITE</span>
+      </a>
+      <span style="color:var(--muted);">&bull;</span>
+      <span style="color:var(--text);font-weight:600;">Weekly Lineup Optimizer</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <button id="btn-gameday-alerts" data-nav="navAlertBtn" onclick="openAlertsModal()" style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.35);color:var(--gold);padding:3px 9px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all 0.15s;" title="Scout Bowie Gameday Alerts & Settings">
+        <span>🔔 Gameday Alerts</span>
+        <span id="navAlertBadgeCount" class="alert-count-badge" style="display:none;font-size:9px;padding:0 4px;min-width:14px;height:14px;">0</span>
+      </button>
+      <a href="../index.html" style="color:var(--muted);text-decoration:none;padding:3px 8px;border-radius:4px;border:1px solid var(--border);transition:all 0.15s;">◄ Portal Home</a>
+      <a href="../draft/index.html" style="color:var(--accent);text-decoration:none;padding:3px 8px;border-radius:4px;border:1px solid var(--accent);background:rgba(79,209,165,0.08);transition:all 0.15s;">Live Draft Companion ➔</a>
+    </div>
+  </div>
+
+  <!-- Player Drawer Overlay & Panel -->
+  <div id="drawerOverlay" onclick="closeDrawer()"></div>
+  <div id="playerDrawer">
+    <button class="drawer-close" onclick="closeDrawer()">&times;</button>
+    <div class="drawer-header">
+      <div class="drawer-title">
+        <span id="dPlayerName">—</span>
+        <span id="dPlayerInj"></span>
+      </div>
+      <div class="drawer-meta">
+        <span id="dPlayerPos" class="pos-tag pos-WR">WR</span>
+        <span id="dPlayerTeam">—</span>
+        <span>&middot;</span>
+        <span id="dPlayerOpp">—</span>
+      </div>
+    </div>
+
+    <!-- 3-Tier Modal Body -->
+    <!-- Row 1 (3-Column Grid): Floor, Expected Points Highlighted, Ceiling -->
+    <div class="modal-tier-1">
+      <div class="drawer-stat">
+        <div class="lbl">Floor (10th %ile)</div>
+        <div class="val" id="dPlayerFloor" style="color:#94a3b8;font-size:14px;font-weight:700;">—</div>
+      </div>
+      <div class="drawer-stat highlight-card">
+        <div class="lbl">Expected Points E[X]</div>
+        <div class="val text-proj" id="dPlayerMean" style="font-size:15px;font-weight:800;">—</div>
+        <div id="dPlayerMeanDelta"></div>
+      </div>
+      <div class="drawer-stat">
+        <div class="lbl">Ceiling (90th %ile)</div>
+        <div class="val" id="dPlayerCeiling" style="color:var(--gold);font-size:14px;font-weight:700;">—</div>
+      </div>
+    </div>
+
+    <!-- Row 2 (2-Column Grid): Bust Probability, Boom Probability -->
+    <div class="modal-tier-2">
+      <div class="drawer-stat">
+        <div class="lbl">Bust Probability (&lt;10 pts)</div>
+        <div class="val text-rose" id="dPlayerBust" style="color:#f43f5e;font-size:15px;font-weight:800;">—</div>
+      </div>
+      <div class="drawer-stat">
+        <div class="lbl">Boom Probability (&gt;22 pts)</div>
+        <div class="val text-emerald" id="dPlayerBoom" style="color:#10b981;font-size:15px;font-weight:800;">—</div>
+      </div>
+    </div>
+
+    <!-- Row 3 (Full-Width Matchup & Vegas Outlook Card) -->
+    <div class="modal-tier-3">
+      <div class="lbl" style="font-size:0.68rem;font-weight:700;letter-spacing:0.05em;color:#94a3b8;margin-bottom:8px;text-transform:uppercase;">Matchup Context & Vegas Outlook</div>
+      <div class="context-grid">
+        <div class="context-item">
+          <span class="context-k">Opponent Defense Rank:</span>
+          <span class="context-v" id="dPlayerOppRank">—</span>
+        </div>
+        <div class="context-item">
+          <span class="context-k">Implied Team Total:</span>
+          <span class="context-v" id="dPlayerImpliedTotal">—</span>
+        </div>
+        <div class="context-item">
+          <span class="context-k">Game Script:</span>
+          <span class="context-v" id="dPlayerGameScript">—</span>
+        </div>
+        <div class="context-item">
+          <span class="context-k">Venue:</span>
+          <span class="context-v" id="dPlayerVenueEnv">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Setup Modal -->
+  <div id="setupModal">
+    <div class="setup-card">
+      <div class="modal-mascot-hero" style="display:flex;align-items:center;gap:16px;margin-bottom:20px;background:rgba(28, 37, 55, 0.85);border:1px solid rgba(241,196,15,0.3);border-radius:12px;padding:14px 16px;box-shadow:0 4px 16px rgba(0,0,0,0.25);position:relative;overflow:hidden;">
+        <img src="../assets/scout-bowie.webp" class="modal-mascot-img" style="width:68px;height:68px;border-radius:50%;object-fit:cover;object-position:50% 12%;border:2.5px solid var(--gold);flex-shrink:0;box-shadow:0 0 16px rgba(241,196,15,0.4);cursor:pointer;" alt="Scout Bowie" onclick="triggerBowieEasterEgg(this)" onerror="this.onerror=null; this.src='../Bowie.jpg';">
+        <div style="flex:1;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-weight:800;font-size:14.5px;color:var(--gold);">Scout Bowie</span>
+            <span style="font-size:10px;background:rgba(241,196,15,0.2);color:var(--gold);padding:1px 6px;border-radius:4px;border:1px solid rgba(241,196,15,0.4);font-weight:800;">CHIEF SCOUT</span>
+          </div>
+          <div style="font-size:12px;color:var(--text);margin-top:3px;line-height:1.35;">"Ready to simulate 10,000 game outcomes, spot lock plays, and bark warnings at risky traps!" 🐾</div>
+        </div>
+      </div>
+
+      <div class="modal-tabs">
+        <div class="modal-tab modal-tab-btn active" id="tabLeagueBtn" onclick="switchSetupTab('league')">Sleeper League</div>
+        <div class="modal-tab modal-tab-btn" id="tabImportBtn" onclick="switchSetupTab('import')">ESPN / Yahoo <span class="beta-tag">Beta</span></div>
+        <div class="modal-tab modal-tab-btn" id="tabDemoBtn" onclick="switchSetupTab('demo')">Sample League</div>
+      </div>
+
+      <!-- Tab 1: Live League Connect -->
+      <div id="tabLeagueContent">
+        <p style="color:var(--muted);font-size:12px;margin:0 0 14px;line-height:1.4;">Enter your Sleeper Username or League ID to pull weekly rosters, matchups, and projections.</p>
+        
+        <div class="form-group">
+          <label>Sleeper Username or League ID</label>
+          <input type="text" id="sleeperInput" class="text-input" placeholder="e.g. your_sleeper_username or League ID (e.g. 11223344...)" value="" autofocus onkeydown="if(event.key==='Enter') onFetchLeagues()">
+        </div>
+
+        <button class="primary-btn" id="findLeagueBtn" onclick="onFetchLeagues()">Find League & Rosters</button>
+
+        <!-- League Selection Dropdown (if multiple leagues found) -->
+        <div id="leagueSelectGroup" class="form-group" style="display:none;margin-top:14px;">
+          <label>Select League</label>
+          <select id="leagueDropdown" class="select-input" onchange="onSelectLeague()"></select>
+        </div>
+
+        <!-- Team / User Selection Dropdown -->
+        <div id="teamSelectGroup" class="form-group" style="display:none;margin-top:14px;">
+          <label>Select Your Team</label>
+          <select id="teamDropdown" class="select-input"></select>
+        </div>
+
+        <div class="form-group" id="weekSelectGroup" style="display:none;margin-top:14px;">
+          <label>NFL Week</label>
+          <select id="modalWeekSelect" class="select-input">
+            <option value="1" selected>Week 1</option>
+            <option value="2">Week 2</option>
+            <option value="3">Week 3</option>
+            <option value="4">Week 4</option>
+            <option value="5">Week 5</option>
+            <option value="6">Week 6</option>
+            <option value="7">Week 7</option>
+            <option value="8">Week 8</option>
+            <option value="9">Week 9</option>
+            <option value="10">Week 10</option>
+            <option value="11">Week 11</option>
+            <option value="12">Week 12</option>
+            <option value="13">Week 13</option>
+            <option value="14">Week 14</option>
+            <option value="15">Week 15 (Playoffs)</option>
+            <option value="16">Week 16 (Semis)</option>
+            <option value="17">Week 17 (Championship)</option>
+          </select>
+        </div>
+
+        <button class="primary-btn" id="launchOptimizerBtn" style="display:none;margin-top:14px;" onclick="initMatchupFromSelection()">Launch Lineup Optimizer ➔</button>
+      </div>
+
+      <!-- Tab 2: Import ESPN / Yahoo -->
+      <div id="tabImportContent" style="display:none;">
+        <p style="color:var(--muted);font-size:12px;margin:0 0 12px;line-height:1.4;">
+          Sync active lineups, bench players, and live projected scores directly from your ESPN or Yahoo fantasy matchup page.
+        </p>
+
+        <div class="bookmarklet-box">
+          <div class="bookmarklet-header">
+            <span class="bookmarklet-title">Scout Bowie Matchup Bookmarklet</span>
+            <span class="bookmarklet-tag">1-CLICK SYNC</span>
+          </div>
+
+          <div style="text-align:center;margin:14px 0;">
+            <a href="javascript:(function(){function e(){const o=window.location.hostname||'',e=o.includes('espn.com'),t=o.includes('yahoo.com');if(!e&&!t)return alert('🏈 Scout Bowie Sync: Run this on an ESPN or Yahoo matchup page!'),null;const a={platform:e?'espn':'yahoo',timestamp:Date.now(),userTeamName:'Your Fantasy Team',oppTeamName:'Opponent Team',userRoster:[],oppRoster:[]};if(e){const o=document.querySelectorAll('.team-name,.competitor__info .name,.matchup-header .team-info');o.length>=2&&(a.userTeamName=(o[0].textContent||'Your Team').trim(),a.oppTeamName=(o[1].textContent||'Opponent Team').trim());const e=document.querySelectorAll('.Table__TBODY,table.Table tbody');function t(o,e=!1){o&&o.querySelectorAll('tr.Table__TR').forEach((o=>{const t=o.querySelector('.lineup-slot,td:first-child'),r=o.querySelector('.player-column__athlete,.AnchorLink[href*=\'/nfl/player/\'],.player-name');if(!r)return;const n=r.textContent.trim();if(!n||n.toLowerCase().includes('empty'))return;const c=t?t.textContent.trim().toUpperCase():'BENCH',s=c.includes('BENCH')||'BE'===c||'IR'===c?'BN':c||'FLEX';let l='FLEX',p='';const i=o.querySelector('.player-info,.player-column__position,.user-name + span'),m=i?i.textContent.trim():o.textContent,u=m.match(/\b(QB|RB|WR|TE|K|D\/ST|DEF)\b/i);u&&(l=u[1].toUpperCase().replace('D/ST','DEF'));const d=m.match(/\b(ARI|ATL|BAL|BUF|CAR|CHI|CIN|CLE|DAL|DEN|DET|GB|HOU|IND|JAX|KC|LAC|LAR|LV|MIA|MIN|NE|NO|NYG|NYJ|PHI|PIT|SEA|SF|TB|TEN|WAS)\b/i);d&&(p=d[1].toUpperCase());let y=0;o.querySelectorAll('.tar,td.col-projected,td.col-stat').forEach((o=>{const e=parseFloat(o.textContent.trim());!isNaN(e)&&e>0&&e<60&&(y=e)}));const g={name:n,position:l,team:p,slot:s,proj:y||10};e?a.oppRoster.push(g):a.userRoster.push(g)}))}e.length>=2?(t(e[0],!1),t(e[1],!0)):1===e.length&&t(e[0],!1)}if(t){const o=document.querySelectorAll('.Ta-c.Fz-xxs a,.user-name a,#matchup-header .name a,.ysf-team-name');o.length>=2&&(a.userTeamName=(o[0].textContent||'Your Team').trim(),a.oppTeamName=(o[1].textContent||'Opponent Team').trim());const e=document.querySelectorAll('#statTable0,#statTable1,.ysf-roster-table');function r(o,e=!1){o&&o.querySelectorAll('tbody tr').forEach((o=>{const t=o.querySelector('.ysf-player-name a,.name a,td.player .name');if(!t)return;const r=t.textContent.trim();if(!r||r.toLowerCase().includes('(empty)'))return;const n=o.querySelector('td.pos,td.first,.pos-label'),c=n?n.textContent.trim().toUpperCase():'BN',s='BN'===c||'BENCH'===c||'IR'===c?'BN':c.replace('W/R/T','FLEX').replace('W/R','FLEX');let l='FLEX',p='';const i=o.querySelector('.ysf-player-name span,td.player span'),m=i?i.textContent:o.textContent,u=m.match(/\b(QB|RB|WR|TE|K|DEF)\b/i);u&&(l=u[1].toUpperCase());const d=m.match(/\b(Ari|Atl|Bal|Buf|Car|Chi|Cin|Cle|Dal|Den|Det|GB|Hou|Ind|Jax|KC|LAC|LAR|LV|Mia|Min|NE|NO|NYG|NYJ|Phi|Pit|Sea|SF|TB|Ten|Was)\b/i);d&&(p=d[1].toUpperCase());let y=0;const g=o.querySelector('td[data-stat=\'projected\'],td.Ta-end.Fw-b,td.alt.last');if(g){const o=parseFloat(g.textContent.trim());!isNaN(o)&&o>0&&(y=o)}const f={name:r,position:l,team:p,slot:s,proj:y||10};e?a.oppRoster.push(f):a.userRoster.push(f)}))}e.length>=2?(r(e[0],!1),r(e[1],!0)):1===e.length&&r(e[0],!1)}return a}const o=e();if(!o||0===o.userRoster.length)return void alert('⚠️ Scout Bowie Sync: Could not find active players on this page.');const t=JSON.stringify(o),r=btoa(unescape(encodeURIComponent(t))),n='localhost'===window.location.hostname||'127.0.0.1'===window.location.hostname?window.location.protocol+'//'+window.location.host+'/weekly/':'https://scout-bowie-analytics.github.io/sleeper-analytics-suite/weekly/',a=n+'#import='+encodeURIComponent(r);try{navigator.clipboard.writeText(t)}catch(o){}window.open(a,'_blank')||(window.location.href=a);})();" class="bookmarklet-btn" draggable="true" title="Drag this button to your bookmarks bar">
+              🏈 Scout Bowie Sync
+            </a>
+          </div>
+
+          <div class="bookmarklet-steps">
+            <div class="step-item">
+              <span class="step-num">1</span>
+              <div>
+                <div><strong>Drag</strong> the button above directly to your browser's Bookmarks Bar.</div>
+                <div class="bookmarklet-shortcut-tip">
+                  (Don't see your bookmarks bar? Press <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd> on Windows or <kbd>Cmd</kbd> + <kbd>Shift</kbd> + <kbd>B</kbd> on Mac to unhide it).
+                </div>
+              </div>
+            </div>
+            <div class="step-item">
+              <span class="step-num">2</span>
+              <div><strong>Open</strong> your ESPN or Yahoo fantasy matchup page and click the bookmark to sync.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Manual Fallback Collapsible Accordion -->
+        <details class="manual-import-accordion" style="margin-top:14px;">
+          <summary style="font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;padding:6px 0;user-select:none;">
+            ⚙️ Or Paste Raw Matchup JSON (Mobile / Restricted)
+          </summary>
+          <div style="margin-top:8px;">
+            <textarea id="rawMatchupJson" class="text-input" style="width:100%;height:75px;font-family:monospace;font-size:11px;resize:vertical;box-sizing:border-box;" placeholder='{"platform":"espn","userTeamName":"My Team","userRoster":[{"name":"Josh Allen","position":"QB","slot":"QB","proj":22.5}...]}'></textarea>
+            <button class="primary-btn" style="margin-top:8px;width:100%;" onclick="importRawMatchupJson()">Import Raw Matchup</button>
+          </div>
+        </details>
+      </div>
+
+      <!-- Tab 3: Sample Championship Mode -->
+      <div id="tabDemoContent" style="display:none;">
+        <p style="color:var(--muted);font-size:12px;margin:0 0 14px;line-height:1.4;">Test-drive the weekly optimizer, 10k Monte Carlo simulations, and real-time hazard engine with a pre-loaded matchup.</p>
+        <button class="btn-gold" id="btn-launch-sample" style="width:100%;" onclick="initDemoMatchup()">⚡ Launch Sample League</button>
+      </div>
+
+      <div id="modalStatus" style="font-size:11.5px;color:var(--caution);margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- Scout Bowie Gameday Alert Settings Modal -->
+  <div id="alertsModalOverlay" class="alerts-modal-overlay" onclick="if(event.target===this) closeAlertsModal()">
+    <div id="alerts-modal" class="alerts-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="alertsModalTitle">
+      
+      <!-- Modal Header -->
+      <div class="alerts-modal-header">
+        <div class="alerts-modal-title-group">
+          <div class="alerts-modal-title" id="alertsModalTitle">
+            <span>🔔 Scout Bowie Gameday Alerts</span>
+          </div>
+          <div class="alerts-modal-subtitle">Automated sweeps for inactives, late-swaps, weather spikes, and lineup drift.</div>
+        </div>
+        <button id="closeAlertsModalBtn" class="alerts-modal-close-btn" onclick="closeAlertsModal()" aria-label="Close modal">&times;</button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="alerts-modal-body">
+        
+        <!-- Discord Webhook Section -->
+        <div class="alert-config-card">
+          <div class="alert-config-header">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#5865F2"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
+            <span>Discord Webhook Alerts</span>
+          </div>
+          <div class="alert-input-group">
+            <input type="text" id="discord-webhook-input" class="alert-text-input" placeholder="https://discord.com/api/webhooks/..." autocomplete="off" oninput="onDiscordInputChanged()">
+            <button id="btn-test-discord" class="alert-test-btn" onclick="testDiscordWebhook()">Connect</button>
+          </div>
+          <div class="alert-helper-text">Paste a channel webhook URL from your private server or league Discord.</div>
+        </div>
+
+        <!-- Email Notification Section -->
+        <div class="alert-config-card">
+          <div class="alert-config-header">
+            <span>✉️ Email Sweep Notifications</span>
+          </div>
+          <div class="alert-input-group">
+            <input type="email" id="email-input" class="alert-text-input" placeholder="your-email@domain.com" autocomplete="email" oninput="onEmailInputChanged()">
+            <button id="btn-test-email" class="alert-test-btn" onclick="testEmailNotification()">Connect</button>
+          </div>
+          <div class="alert-helper-text">Get automated Sunday morning sweep emails before kickoff.</div>
+        </div>
+
+        <!-- Alert Rule Checkbox Toggles -->
+        <div class="alert-config-card">
+          <div class="alert-config-header">
+            <span>⚡ Automated Alert Triggers</span>
+          </div>
+          <div class="alert-rules-list">
+            
+            <label class="alert-rule-item" for="alert-toggle-inactive">
+              <input type="checkbox" id="alert-toggle-inactive" class="alert-checkbox" checked>
+              <div class="alert-rule-text">
+                <span class="alert-rule-title">🚨 Inactive Starter Siren</span>
+                <span class="alert-rule-desc">Alert 90 min before kickoff if an active starter is declared OUT, IR, or PUP.</span>
+              </div>
+            </label>
+
+            <label class="alert-rule-item" for="alert-toggle-lateswap">
+              <input type="checkbox" id="alert-toggle-lateswap" class="alert-checkbox" checked>
+              <div class="alert-rule-text">
+                <span class="alert-rule-title">🛡️ Late-Swap Sentinel</span>
+                <span class="alert-rule-desc">Flag afternoon/night Questionable players locked in RB/WR instead of FLEX.</span>
+              </div>
+            </label>
+
+            <label class="alert-rule-item" for="alert-toggle-weather">
+              <input type="checkbox" id="alert-toggle-weather" class="alert-checkbox" checked>
+              <div class="alert-rule-text">
+                <span class="alert-rule-title">💨 Weather Spike Warning</span>
+                <span class="alert-rule-desc">Warn when sustained winds reach &ge;15-20 mph for QBs, deep WRs, and Kickers.</span>
+              </div>
+            </label>
+
+            <label class="alert-rule-item" for="alert-toggle-drift">
+              <input type="checkbox" id="alert-toggle-drift" class="alert-checkbox" checked>
+              <div class="alert-rule-text">
+                <span class="alert-rule-title">📉 Lineup Drift Monitor</span>
+                <span class="alert-rule-desc">Detect when active Sleeper roster trails optimal lineup projection by &gt;3.0 pts.</span>
+              </div>
+            </label>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="alerts-modal-footer">
+        <button id="btn-cancel-alerts" class="alert-btn-cancel" onclick="closeAlertsModal()">Cancel</button>
+        <button id="btn-save-alerts" class="alert-btn-save" onclick="saveAlertPreferences()">Save Preferences</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Bowie Reaction Toast -->
+  <div id="bowieToast">
+    <div class="toast-bubble" id="bowieToastMsg">Bowie approves! 🐾 10/10 optimal swap.</div>
+    <img src="../assets/scout-bowie.webp" class="toast-avatar" alt="Bowie" onclick="triggerBowieEasterEgg(this)" onerror="this.onerror=null; this.src='../Bowie.jpg';">
+  </div>
+
+  <!-- Main App Layout (Visible after setup) -->
+  <div class="wrap" id="mainApp" style="display:none;">
+
+    <!-- Scout Bowie Mascot Header Card -->
+    <div class="mascot-header-card scout-banner">
+      <div class="scout-avatar-wrapper mascot-avatar-wrap" onclick="triggerBowieEasterEgg(this.querySelector('img'))">
+        <img src="../assets/scout-bowie.webp" class="scout-avatar-img mascot-avatar" alt="Bowie" onerror="this.onerror=null; this.src='../Bowie.jpg';">
+      </div>
+      <div class="mascot-speech-bubble" style="display:flex;flex-direction:column;justify-content:center;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:3px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:14px;font-weight:800;color:var(--gold);">Scout Bowie</span>
+            <span style="font-size:10px;background:rgba(241,196,15,0.18);color:var(--gold);padding:1px 6px;border-radius:4px;border:1px solid rgba(241,196,15,0.35);font-weight:800;">Chief Quantitative Scout</span>
+          </div>
+          <span style="font-size:10px;color:var(--muted);cursor:pointer;" onclick="triggerBowieEasterEgg(document.querySelector('.scout-avatar-img'))">👉 Click Bowie for scouting take</span>
+        </div>
+        <div id="bowieScoutTip" style="font-size:12.5px;color:var(--text);font-weight:500;line-height:1.4;">
+          "You hold a projected +12.9 point edge. Select 'Safe Floor' to choke out variance and bench risky boom-or-bust players." 🐾
+        </div>
+      </div>
+    </div>
+
+    <!-- Matchup Title & Format Header -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-top:0.5rem;margin-bottom:14px;">
+      <div>
+        <h1 id="leagueTitle" style="font-size:22px;letter-spacing:.3px;margin:0 0 2px;font-weight:700;">Weekly Matchup Optimizer</h1>
+        <div class="sub" id="leagueSub" style="color:var(--muted);font-size:13px;margin-bottom:6px;">Loading league matchup...</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <!-- Automatic Matchup Status Badge -->
+        <div id="matchup-status-badge" class="matchup-status-badge">
+          <span class="badge-pregame">⚡ PRE-KICKOFF OPTIMIZER</span>
+        </div>
+
+        <!-- Interactive Demo Mode Switch (Sample Championship Only) -->
+        <div id="demo-toggle-container" style="display:none;">
+          <button class="reset-btn demo-toggle-btn" id="btn-toggle-live-mode" onclick="window.toggleLiveGamedayDemo()" title="Toggle Sample Championship demo between Pre-Game and Live Gameday simulation">
+            <span id="demoTogglePre" class="demo-toggle-segment active pre">⚡ Pre-Game View</span>
+            <span class="demo-toggle-divider">|</span>
+            <span id="demoToggleLive" class="demo-toggle-segment"><span class="pulse-dot" style="background:#ef4444;width:6px;height:6px;"></span> Live Gameday View</span>
+          </button>
+        </div>
+
+        <div class="live-indicator">
+          <span class="pulse-dot"></span> <span id="simPerfText">10k SIMS READY</span>
+        </div>
+        <button class="reset-btn" onclick="openSetupModal()">Change Matchup</button>
+      </div>
+    </div>
+
+    <!-- Matchup Scoreboard & Win Probability Gauge -->
+    <div class="optimizer-scoreboard">
+      <!-- User Team -->
+      <div class="team-display">
+        <img id="userAvatar" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120' width='120' height='120'><defs><linearGradient id='qbg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%230f172a'/><stop offset='100%25' stop-color='%231e1b4b'/></linearGradient><linearGradient id='qbolt' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%2338bdf8'/><stop offset='50%25' stop-color='%23818cf8'/><stop offset='100%25' stop-color='%23c084fc'/></linearGradient><filter id='glow'><feGaussianBlur stdDeviation='3' result='coloredBlur'/><feMerge><feMergeNode in='coloredBlur'/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><rect width='120' height='120' rx='28' fill='url(%23qbg)' stroke='%2338bdf8' stroke-width='2.5'/><circle cx='60' cy='60' r='42' fill='none' stroke='rgba(56,189,248,0.2)' stroke-width='2' stroke-dasharray='4,4'/><path d='M66 22 L38 62 L58 62 L52 98 L82 54 L62 54 Z' fill='url(%23qbolt)' filter='url(%23glow)'/></svg>" class="team-avatar-img" alt="Your Team" onerror="this.onerror=null; this.src='https://sleepercdn.com/images/v2/icons/player_default.webp';">
+        <div class="team-details">
+          <span class="pos-tag pos-RB" style="margin-bottom:2px;">YOUR TEAM</span>
+          <h3 id="userTeamName">Quantum Blitz</h3>
+          <div class="pts-large" style="color:var(--accent);" id="userProjPts">138.5 pts</div>
+          <div id="userRangeSummary" style="font-size:11px;color:var(--muted);margin-top:2px;">Floor: <span id="userFloorTotal" style="color:#94a3b8;font-weight:700;">—</span> &middot; Ceil: <span id="userCeilTotal" style="color:var(--gold);font-weight:700;">—</span></div>
+        </div>
+      </div>
+
+      <!-- Center Win Probability Gauge -->
+      <div class="gauge-container">
+        <div class="win-prob-title">Win Probability</div>
+        <div class="win-prob-number" id="winProbNumber" style="color:var(--accent);">56.4%</div>
+        <div class="meter-track">
+          <div class="meter-fill" id="meterFill" style="width:56.4%;"></div>
+        </div>
+        <div class="spread-pill" id="spreadText">SPREAD: -12.9 | TOTAL EXP: 242.4 pts</div>
+      </div>
+
+      <!-- Opponent Team -->
+      <div class="team-display" style="justify-content:flex-end;text-align:right;">
+        <div class="team-details">
+          <span class="pos-tag pos-WR" style="margin-bottom:2px;">OPPONENT</span>
+          <h3 id="oppTeamName">Apex Predators</h3>
+          <div class="pts-large" style="color:#38bdf8;" id="oppProjPts">135.0 pts</div>
+        </div>
+        <img id="oppAvatar" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120' width='120' height='120'><defs><linearGradient id='apbg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%2318181b'/><stop offset='100%25' stop-color='%23450a0a'/></linearGradient><linearGradient id='aplion' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23f59e0b'/><stop offset='50%25' stop-color='%23ef4444'/><stop offset='100%25' stop-color='%23b91c1c'/></linearGradient><filter id='apglow'><feGaussianBlur stdDeviation='3' result='coloredBlur'/><feMerge><feMergeNode in='coloredBlur'/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><rect width='120' height='120' rx='28' fill='url(%23apbg)' stroke='%23ef4444' stroke-width='2.5'/><path d='M60 24 L72 40 L88 36 L82 52 L96 62 L80 72 L84 88 L68 82 L60 96 L52 82 L36 88 L40 72 L24 62 L38 52 L32 36 L48 40 Z' fill='none' stroke='rgba(245,158,11,0.3)' stroke-width='2'/><path d='M60 32 L68 48 L82 46 L76 60 L88 70 L72 76 L74 90 L60 82 L46 90 L48 76 L32 70 L44 60 L38 46 L52 48 Z' fill='url(%23aplion)' filter='url(%23apglow)'/></svg>" class="team-avatar-img" alt="Opponent" onerror="this.onerror=null; this.src='https://sleepercdn.com/images/v2/icons/player_default.webp';">
+      </div>
+    </div>
+
+    <!-- Scout Bowie Gameday Live Hazard & Alert Sweep Banner -->
+    <div id="gamedayAlertBanner" class="gameday-alert-banner" style="display:none;">
+      <div class="gameday-alert-header-row">
+        <div class="gameday-alert-title">
+          <span id="gamedayAlertIcon">🚨</span>
+          <span id="gamedayAlertHeadline">GAMEDAY ALERTS DETECTED</span>
+        </div>
+        <div class="gameday-alert-actions">
+          <button id="btn-dispatch-alerts" class="dispatch-alert-btn" onclick="dispatchGamedayAlerts()" title="Push active alerts directly to your configured Discord webhook and Email">
+            <span>📢 Dispatch Alerts</span>
+          </button>
+        </div>
+      </div>
+      <div id="gamedayAlertItems" class="gameday-alert-items"></div>
+    </div>
+
+    <!-- Recommended Swaps Alert Banner -->
+    <div id="swapsBanner" class="swaps-alert-banner" style="display:none;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span class="golden-bone-badge">★ RECOMMENDED SWAP</span>
+        <div id="swapsList" class="swap-row"></div>
+      </div>
+      <button id="btn-apply-optimal" class="primary-btn" style="padding:6px 14px;font-size:12px;transition:all 0.2s ease;" onclick="applyOptimalLineup()">Apply Optimal Lineup ➔</button>
+    </div>
+
+    <!-- Main Layout: 2 Columns -->
+    <div class="layout">
+
+      <!-- Left Column: Lineup Tables -->
+      <div class="left">
+
+        <!-- Active Starters Table -->
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div class="table-header-row" style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <h2 id="startersTableTitle" style="margin:0;">Active Starting Lineup</h2>
+              <span id="startersTableBadge" class="fmt-badge active">STARTERS</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <div class="lineup-view-toggle">
+                <button class="view-pill active" id="viewUserBtn" data-view="user" onclick="window.onTeamViewChange('user')">Your Lineup</button>
+                <button class="view-pill" id="viewOppBtn" data-view="opp" onclick="window.onTeamViewChange('opp')">Opponent</button>
+              </div>
+              <div class="strategy-pill-group" id="strategyPillGroup">
+                <button class="strategy-pill" data-mode="floor" onclick="window.onStrategyModeChange('floor')">🛡️ Safe Floor</button>
+                <button class="strategy-pill active" data-mode="balanced" onclick="window.onStrategyModeChange('balanced')">⚖️ Balanced (E[X])</button>
+                <button class="strategy-pill" data-mode="ceiling" onclick="window.onStrategyModeChange('ceiling')">🚀 Max Upside</button>
+              </div>
+            </div>
+          </div>
+          <table class="lineup-table">
+            <thead>
+              <tr class="table-header">
+                <th class="th-slot col-slot">Slot</th>
+                <th class="th-player col-player">Player</th>
+                <th class="th-status col-status">Status</th>
+                <th class="th-range col-range">Range [Floor · E[X] · Ceil]</th>
+                <th class="th-scout-alert col-scout-alert col-alert">Scout Alert</th>
+                <th class="th-action col-swap col-action">In-Place Swap</th>
+              </tr>
+            </thead>
+            <tbody id="startersTableBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Bench Table -->
+        <div class="card" style="margin-top:16px;padding:0;overflow:hidden;">
+          <div class="table-header-row" style="padding:14px 16px 10px;">
+            <h2 id="benchTableTitle" style="margin:0;">Bench & Reserves</h2>
+          </div>
+          <table class="lineup-table">
+            <thead>
+              <tr class="table-header">
+                <th class="th-slot col-slot">Pos</th>
+                <th class="th-player col-player">Player</th>
+                <th class="th-status col-status">Status</th>
+                <th class="th-range col-range">Range [Floor · E[X] · Ceil]</th>
+                <th class="th-scout-alert col-scout-alert col-alert">Scout Alert</th>
+                <th class="th-action col-eligible col-eligible-slots col-action">Eligible Slots</th>
+              </tr>
+            </thead>
+            <tbody id="benchTableBody"></tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Scout Bowie Alerts & Simulation Visualizer -->
+      <div class="right">
+
+        <!-- Scout Bowie Tactical Dossier Card -->
+        <div class="card">
+          <h2>Scout Bowie Matchup Dossier</h2>
+          
+          <!-- 1. Golden Bone Lock of the Week -->
+          <div id="lockCard" style="background:rgba(234,179,8,0.06);border:1px solid rgba(234,179,8,0.25);border-radius:8px;padding:12px 16px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;flex-wrap:wrap;">
+              <span class="dossier-pill lock-pill">🐾 LOCK OF THE WEEK</span>
+              <span style="font-size:11px;font-weight:700;color:#eab308;" id="lockConf">98.5% HIGH CONFIDENCE</span>
+            </div>
+            <div style="font-size:13px;font-weight:700;color:#fff;" id="lockPlayerName">—</div>
+            <div style="font-size:11.5px;color:var(--muted);margin-top:2px;" id="lockDesc">—</div>
+          </div>
+
+          <!-- 2. Bowie Bark Warning Trap Alert -->
+          <div id="trapCard" style="background:rgba(244,63,94,0.06);border:1px solid rgba(244,63,94,0.25);border-radius:8px;padding:12px 16px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;flex-wrap:wrap;">
+              <span class="dossier-pill bark-pill">⚠️ BOWIE BARK WARNING</span>
+              <span style="font-size:11px;font-weight:700;color:#f43f5e;" id="trapRisk">VOLATILE RISK</span>
+            </div>
+            <div style="font-size:13px;font-weight:700;color:#fff;" id="trapPlayerName">—</div>
+            <div style="font-size:11.5px;color:#ffb3ba;margin-top:2px;" id="trapDesc">—</div>
+          </div>
+
+          <!-- 3. Boom Flex Weapon -->
+          <div id="boomCard" style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);border-radius:8px;padding:12px 16px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;flex-wrap:wrap;">
+              <span class="dossier-pill boom-pill">🚀 BOOM CANDIDATE</span>
+              <span style="font-size:11px;font-weight:700;color:#10b981;" id="boomSurge">+10.4 Pts</span>
+            </div>
+            <div style="font-size:13px;font-weight:700;color:#fff;" id="boomPlayerName">—</div>
+            <div style="font-size:11.5px;color:var(--muted);margin-top:2px;" id="boomDesc">—</div>
+          </div>
+
+          <!-- 4. Bench Wildcard -->
+          <div id="wildcardCard" style="border: 1px solid rgba(168, 85, 247, 0.2); background: rgba(168, 85, 247, 0.03); border-radius: 8px; padding: 12px 16px; margin-top: 10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:8px;flex-wrap:wrap;">
+              <span class="dossier-pill wildcard-pill">🎲 BENCH WILDCARD</span>
+              <span style="font-size:11px;font-weight:700;color:#c084fc;" id="wildcardSurge">+12.4 Pts Ceiling Potential</span>
+            </div>
+            <div style="font-size:13px;font-weight:700;color:#fff;" id="wildcardPlayerName">—</div>
+            <div style="font-size:11.5px;color:var(--muted);margin-top:2px;" id="wildcardDesc">—</div>
+          </div>
+        </div>
+
+        <!-- 10,000-Iteration Probability Density Chart -->
+        <div class="card" style="margin-top:16px;padding-bottom:14px;">
+          <div class="table-header-row" style="flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px;">
+            <h2 style="margin:0;">10k Monte Carlo Density Curves</h2>
+            <span id="chartWinBadge" class="badge-winrate" style="font-size:11px;font-weight:800;padding:3px 9px;border-radius:6px;">LIVE SIM</span>
+          </div>
+          <div class="chart-box" style="height:250px;position:relative;margin-top:4px;">
+            <canvas id="densityChart"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Weekly Lineup App Logic (with cache-busting) -->
+  <script type="module" src="./weekly-app.js?v=5.9.0"></script>
+</body>
+</html>
