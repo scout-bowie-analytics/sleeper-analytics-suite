@@ -369,8 +369,10 @@ export class SleeperApiClient {
     if (!team || team === 'FA' || team === 'None' || team === 'FA*') {
       return 0.0;
     }
-    const status = (sp.status || '').toLowerCase();
-    if (status === 'inactive' || status === 'free agent' || status === 'retired') {
+    const status = (sp.status || '').toUpperCase();
+    const injStatus = (sp.injury_status || '').toUpperCase();
+    const sidelinedStatuses = new Set(['IR', 'PUP', 'OUT', 'SUSPENDED', 'INACTIVE', 'FREE AGENT', 'RETIRED', 'DNR']);
+    if (sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus)) {
       return 0.0;
     }
 

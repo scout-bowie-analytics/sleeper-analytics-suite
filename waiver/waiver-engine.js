@@ -125,19 +125,21 @@ export class WaiverEngine {
         if (pos === 'FLEX' || ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(pos)) {
           const team = (player.team || '').trim();
           const hasNflTeam = team && team !== 'FA' && team !== 'None' && team !== 'FA*';
-          const status = (player.status || '').toLowerCase();
-          const isNflActive = status !== 'inactive' && status !== 'free agent' && status !== 'retired';
+          const status = (player.status || '').toUpperCase();
+          const injStatus = (player.injury_status || '').toUpperCase();
+          const sidelinedStatuses = new Set(['IR', 'PUP', 'OUT', 'SUSPENDED', 'INACTIVE', 'FREE AGENT', 'RETIRED', 'DNR']);
+          const isSidelined = sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus);
 
-          // If player is not currently on an NFL team, projection MUST be 0.0 pts
+          // If player is not on an NFL team or is on IR/PUP/OUT, projection MUST be 0.0 pts
           let rawProj = 0;
-          if (hasNflTeam && isNflActive) {
+          if (hasNflTeam && !isSidelined) {
             rawProj = weekProjections[pid] !== undefined 
               ? Number(weekProjections[pid]) 
               : (Number(player.projected_pts) || 0);
           }
 
           // Check if this player inherited a starting role
-          const inheritance = hasNflTeam ? (inheritanceMap.get(pid) || null) : null;
+          const inheritance = (hasNflTeam && !isSidelined) ? (inheritanceMap.get(pid) || null) : null;
           const finalProj = inheritance 
             ? Math.max(rawProj, inheritance.inheritedProj)
             : rawProj;
@@ -145,8 +147,8 @@ export class WaiverEngine {
           // Calculate Contingent Handcuff Score (1-100)
           const contingentScore = (hasNflTeam && inheritance) ? 96 : (hasNflTeam ? this.calculateContingentUpside(player) : 0);
 
-          // Exclude players not on an NFL team and long-tail noise
-          if (hasNflTeam && (finalProj >= this.options.minProjectionThreshold || contingentScore >= 65 || pos === 'DEF' || inheritance)) {
+          // Exclude players not on an NFL team, sidelined zero-scorers, and long-tail noise
+          if (hasNflTeam && !isSidelined && (finalProj >= this.options.minProjectionThreshold || contingentScore >= 65 || pos === 'DEF' || inheritance)) {
             freeAgents.push({
               ...player,
               player_id: pid,
@@ -191,9 +193,13 @@ export class WaiverEngine {
       const player = allPlayersMap[pid] || { player_id: pid, full_name: `Player ${pid}`, position: 'FLEX' };
       const team = (player.team || '').trim();
       const hasNflTeam = team && team !== 'FA' && team !== 'None' && team !== 'FA*';
+      const status = (player.status || '').toUpperCase();
+      const injStatus = (player.injury_status || '').toUpperCase();
+      const sidelinedStatuses = new Set(['IR', 'PUP', 'OUT', 'SUSPENDED', 'INACTIVE', 'FREE AGENT', 'RETIRED', 'DNR']);
+      const isSidelined = sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus);
 
       let proj = 0;
-      if (hasNflTeam) {
+      if (hasNflTeam && !isSidelined) {
         proj = weekProjections[pid] !== undefined 
           ? Number(weekProjections[pid]) 
           : (Number(player.projected_pts) || 0);
@@ -205,15 +211,16 @@ export class WaiverEngine {
         projected_pts: Number(proj.toFixed(1)),
         isStarter: starterIds.has(pid),
         isBench: !starterIds.has(pid),
-        hasNflTeam
+        hasNflTeam,
+        isSidelined
       };
 
       if (starterIds.has(pid)) {
         starters.push(decorated);
       } else {
         bench.push(decorated);
-        // Check if player on bench is OUT/IR eligible
-        if (['OUT', 'IR', 'PUP'].includes(player.status) || ['OUT', 'IR', 'PUP'].includes(player.injury_status)) {
+        // Check if player on bench is OUT/IR/PUP eligible
+        if (isSidelined || ['OUT', 'IR', 'PUP'].includes(player.status) || ['OUT', 'IR', 'PUP'].includes(player.injury_status)) {
           irEligiblePlayer = decorated;
         }
       }
