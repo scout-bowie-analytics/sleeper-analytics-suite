@@ -33,6 +33,16 @@ A quantitative, client-side fantasy football analytics suite and live draft comm
 
 ---
 
+## 🤝 Contributing & Suggestions
+
+Community contributions, feature ideas, and feedback are warmly welcomed!
+
+- **Feature Requests & Bug Reports**: Open an [Issue](https://github.com/scout-bowie-analytics/sleeper-analytics-suite/issues) to suggest new models, platform importers, or UI enhancements.
+- **Pull Requests**: Fork the repository, create a feature branch, and submit a PR.
+- **Scouting Feedback**: Have ideas for Scout Bowie's matchup algorithm or queue logic? Let us know in Issues!
+
+---
+
 ## 🔒 Privacy & Architecture
 
 - **Zero Server Footprint**: Runs 100% client-side in the browser using modern TypedArrays and asynchronous Web Workers.
