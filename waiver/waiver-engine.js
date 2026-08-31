@@ -123,21 +123,30 @@ export class WaiverEngine {
       if (!rosteredIds.has(pid)) {
         const pos = player.position || 'FLEX';
         if (pos === 'FLEX' || ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(pos)) {
-          const rawProj = weekProjections[pid] !== undefined 
-            ? Number(weekProjections[pid]) 
-            : (Number(player.projected_pts) || 0);
+          const team = (player.team || '').trim();
+          const hasNflTeam = team && team !== 'FA' && team !== 'None' && team !== 'FA*';
+          const status = (player.status || '').toLowerCase();
+          const isNflActive = status !== 'inactive' && status !== 'free agent' && status !== 'retired';
+
+          // If player is not currently on an NFL team, projection MUST be 0.0 pts
+          let rawProj = 0;
+          if (hasNflTeam && isNflActive) {
+            rawProj = weekProjections[pid] !== undefined 
+              ? Number(weekProjections[pid]) 
+              : (Number(player.projected_pts) || 0);
+          }
 
           // Check if this player inherited a starting role
-          const inheritance = inheritanceMap.get(pid) || null;
+          const inheritance = hasNflTeam ? (inheritanceMap.get(pid) || null) : null;
           const finalProj = inheritance 
             ? Math.max(rawProj, inheritance.inheritedProj)
             : rawProj;
 
           // Calculate Contingent Handcuff Score (1-100)
-          const contingentScore = inheritance ? 96 : this.calculateContingentUpside(player);
+          const contingentScore = (hasNflTeam && inheritance) ? 96 : (hasNflTeam ? this.calculateContingentUpside(player) : 0);
 
-          // Exclude extreme long-tail inactive noise unless high contingent upside / Next Man Up
-          if (finalProj >= this.options.minProjectionThreshold || contingentScore >= 65 || pos === 'DEF' || inheritance) {
+          // Exclude players not on an NFL team and long-tail noise
+          if (hasNflTeam && (finalProj >= this.options.minProjectionThreshold || contingentScore >= 65 || pos === 'DEF' || inheritance)) {
             freeAgents.push({
               ...player,
               player_id: pid,
@@ -180,16 +189,23 @@ export class WaiverEngine {
 
     allRosterPids.forEach(pid => {
       const player = allPlayersMap[pid] || { player_id: pid, full_name: `Player ${pid}`, position: 'FLEX' };
-      const proj = weekProjections[pid] !== undefined 
-        ? Number(weekProjections[pid]) 
-        : (Number(player.projected_pts) || 0);
+      const team = (player.team || '').trim();
+      const hasNflTeam = team && team !== 'FA' && team !== 'None' && team !== 'FA*';
+
+      let proj = 0;
+      if (hasNflTeam) {
+        proj = weekProjections[pid] !== undefined 
+          ? Number(weekProjections[pid]) 
+          : (Number(player.projected_pts) || 0);
+      }
 
       const decorated = {
         ...player,
         player_id: pid,
         projected_pts: Number(proj.toFixed(1)),
         isStarter: starterIds.has(pid),
-        isBench: !starterIds.has(pid)
+        isBench: !starterIds.has(pid),
+        hasNflTeam
       };
 
       if (starterIds.has(pid)) {

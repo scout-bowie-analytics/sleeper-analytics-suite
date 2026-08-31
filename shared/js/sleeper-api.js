@@ -364,6 +364,16 @@ export class SleeperApiClient {
    * Generate an individualized baseline projection when API feed is off-season or missing
    */
   estimatePlayerProjection(sp, scoringSettings = null) {
+    if (!sp) return 0.0;
+    const team = (sp.team || '').trim();
+    if (!team || team === 'FA' || team === 'None' || team === 'FA*') {
+      return 0.0;
+    }
+    const status = (sp.status || '').toLowerCase();
+    if (status === 'inactive' || status === 'free agent' || status === 'retired') {
+      return 0.0;
+    }
+
     const pos = sp.position || (sp.fantasy_positions && sp.fantasy_positions[0]) || 'FLEX';
     const order = sp.depth_chart_order || 1;
     const exp = sp.years_exp || 2;
