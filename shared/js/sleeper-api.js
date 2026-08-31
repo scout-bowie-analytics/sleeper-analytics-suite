@@ -186,6 +186,20 @@ export class SleeperApiClient {
   }
 
   /**
+   * Universal helper: fetch leagues by username or direct league ID
+   */
+  async fetchUserLeagues(usernameOrId, season = '2026') {
+    if (!usernameOrId) throw new Error('Username or League ID is required');
+    const clean = String(usernameOrId).trim();
+    if (/^\d+$/.test(clean)) {
+      const l = await this.getLeague(clean);
+      return [l];
+    }
+    const user = await this.getUserByUsername(clean);
+    return await this.getUserLeagues(user.user_id, season);
+  }
+
+  /**
    * Fetch league metadata by league_id
    */
   async getLeague(leagueId) {

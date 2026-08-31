@@ -126,7 +126,7 @@ class WaiverApp {
 
     try {
       this.showToast('🐾 Sniffing out league rosters on Sleeper API...');
-      const leagues = await this.api.fetchUserLeagues(query, '2024');
+      const leagues = await this.api.fetchUserLeagues(query);
 
       const leagueSelectGroup = document.getElementById('leagueSelectGroup');
       const leagueDropdown = document.getElementById('leagueDropdown');
@@ -136,22 +136,16 @@ class WaiverApp {
         leagues.forEach(l => {
           const opt = document.createElement('option');
           opt.value = l.league_id;
-          opt.textContent = `${l.name} (${l.total_rosters || 12} Teams)`;
+          opt.textContent = `${l.name} (${l.total_rosters || 12} Teams - ${l.season || '2024'})`;
           leagueDropdown.appendChild(opt);
         });
         leagueSelectGroup.style.display = 'block';
         await this.onSelectLeague();
       } else {
-        // Direct League ID fallback
-        const singleLeague = await this.api.getLeague(query);
-        const opt = document.createElement('option');
-        opt.value = singleLeague.league_id;
-        opt.textContent = singleLeague.name;
-        leagueDropdown.appendChild(opt);
-        leagueSelectGroup.style.display = 'block';
-        await this.onSelectLeague();
+        throw new Error(`No active leagues found for "${query}".`);
       }
     } catch (e) {
+      console.warn('Waiver league lookup error:', e);
       this.showToast(`Error: ${e.message}`);
     }
   }
