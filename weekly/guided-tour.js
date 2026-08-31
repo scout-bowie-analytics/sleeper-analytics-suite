@@ -18,7 +18,7 @@ class ScoutBowieTour {
     this.resizeHandler = this.reposition.bind(this);
     this.keydownHandler = this.handleKeydown.bind(this);
 
-    // 7 Core Tour Steps
+    // 8 Core Tour Steps
     this.steps = [
       {
         target: '.mascot-header-card, .scout-banner',
@@ -60,6 +60,12 @@ class ScoutBowieTour {
         target: '#swapsBanner, #btn-apply-optimal, #startersTableBody tr:first-child .swap-select-dropdown, #strategyPillGroup',
         title: '🔄 In-Place Table Swaps & 1-Click Apply',
         text: 'Make manual bench swaps right in the table or click "Apply Optimal Lineup" to automatically slot your highest-projected starters with strict position locking.',
+        placement: 'top'
+      },
+      {
+        target: '#densityChartCard, .chart-box, #densityChart',
+        title: '📊 10k Monte Carlo Density Curves',
+        text: 'Scroll down to visualize full probability curves for both rosters! Inspect where your distribution overlaps your opponent’s, view median peak outcomes, and hover for target score win odds.',
         placement: 'top'
       }
     ];
