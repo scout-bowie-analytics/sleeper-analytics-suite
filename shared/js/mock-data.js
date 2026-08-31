@@ -70,6 +70,7 @@ export const MOCK_PLAYERS_DB = {
     position: "RB",
     team: "SF",
     opponent: "@ LAR",
+    depth_chart_order: 1,
     points: 19.4,
     projected_points: 19.4,
     projected_pts: 19.4,
@@ -79,9 +80,9 @@ export const MOCK_PLAYERS_DB = {
     ceiling90: 28.6,
     variance: 0.35,
     skew: 1.5,
-    status: "Active",
-    game_status: "Sun 4:05 PM @ LAR",
-    injury_status: null,
+    status: "Inactive",
+    game_status: "OUT - Achilles Tendinitis",
+    injury_status: "OUT",
     avatar: "https://sleepercdn.com/content/nfl/players/thumb/4034.jpg"
   },
   "p_deandre_swift": {
@@ -691,6 +692,20 @@ export const MOCK_MATCHUPS = [
 ];
 
 export const MOCK_FREE_AGENTS_DB = {
+  "fa_jordan_mason": {
+    player_id: "fa_jordan_mason",
+    full_name: "Jordan Mason",
+    first_name: "Jordan",
+    last_name: "Mason",
+    position: "RB",
+    team: "SF",
+    depth_chart_order: 2,
+    opponent: "@ LAR",
+    projected_pts: 4.8,
+    projected_points: 4.8,
+    status: "Active",
+    avatar: "https://sleepercdn.com/content/nfl/players/thumb/8212.jpg"
+  },
   "fa_khalil_shakir": {
     player_id: "fa_khalil_shakir",
     full_name: "Khalil Shakir",

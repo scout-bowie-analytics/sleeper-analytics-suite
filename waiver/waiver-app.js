@@ -258,6 +258,17 @@ class WaiverApp {
     document.getElementById('leagueTitle').textContent = `${leagueName} • Waiver Wire Radar`;
     document.getElementById('leagueSub').textContent = `Available Free Agent Pool: ${this.state.processedTargets.length} targets evaluated against active bench`;
 
+    // Scout Bowie Contextual Reaction
+    const nextManUp = this.state.processedTargets.find(p => p.isNextManUp && p.inheritance);
+    const tipEl = document.getElementById('bowieRadarTip');
+    if (tipEl) {
+      if (nextManUp) {
+        tipEl.innerHTML = `<strong>🚨 NEXT MAN UP ALERT:</strong> <span style="color:#fca5a5;">${nextManUp.full_name} (${nextManUp.position})</span> has inherited ${nextManUp.inheritance.roleDesc}! Bumping projection to ${nextManUp.projected_pts} pts and scaling FAAB bid to Must-Add. 🐾`;
+      } else {
+        tipEl.textContent = `"Scanning available free agents against your bench. Prioritizing positive net projection upgrades, streaming matchups, and high-contingent handcuffs." 🐾`;
+      }
+    }
+
     this.applyFiltersAndSort();
   }
 
@@ -365,7 +376,8 @@ class WaiverApp {
 
       const badgesHtml = item.badges.map(b => {
         let badgeClass = 'badge-upgrade';
-        if (b.type === 'golden_bone') badgeClass = 'badge-golden-bone';
+        if (b.type === 'next_man_up') badgeClass = 'badge-next-man-up';
+        else if (b.type === 'golden_bone') badgeClass = 'badge-golden-bone';
         else if (b.type === 'streamer') badgeClass = 'badge-streamer';
         else if (b.type === 'handcuff') badgeClass = 'badge-handcuff';
         else if (b.type === 'free_add') badgeClass = 'badge-free-add';
@@ -376,8 +388,12 @@ class WaiverApp {
       const deltaPrefix = item.netDelta > 0 ? `+${item.netDelta}` : `${item.netDelta}`;
       const dropPlayerText = item.suggestedDrop ? item.suggestedDrop.text : 'Drop Bench Asset';
 
+      const projDisplayHtml = item.isNextManUp && item.inheritance
+        ? `<span style="color:#fca5a5;font-weight:800;">${item.projected_pts} pts proj</span> <span style="font-size:10.5px;color:#f87171;font-weight:600;" title="Real-time depth chart override: Starter is sidelined">(🚨 Inherited Starter Role • Raw: ${item.raw_projected_pts})</span>`
+        : `<span style="color:var(--text);font-weight:700;">${item.projected_pts} pts proj</span>`;
+
       return `
-        <div class="waiver-card ${item.isGoldenBone ? 'golden-bone-card' : ''}">
+        <div class="waiver-card ${item.isGoldenBone ? 'golden-bone-card' : ''} ${item.isNextManUp ? 'next-man-up-card' : ''}">
           <!-- Col 1: Player Profile -->
           <div class="waiver-player-profile">
             <img src="${avatarUrl}" class="waiver-avatar-img" alt="${item.full_name}" onerror="this.onerror=null; this.src='https://sleepercdn.com/images/v2/icons/player_default.webp';">
@@ -389,7 +405,7 @@ class WaiverApp {
                 <span class="pos-tag ${posClass}">${item.position}</span>
                 <span>${item.team || 'FA'}</span>
                 <span>&bull;</span>
-                <span style="color:var(--text);font-weight:700;">${item.projected_pts} pts proj</span>
+                ${projDisplayHtml}
                 <span>vs ${item.opponent || 'OPP'}</span>
               </div>
               <div class="waiver-badges-row">${badgesHtml}</div>

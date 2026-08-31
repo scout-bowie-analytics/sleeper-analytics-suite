@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 🐾 WAIVER WIRE RADAR & FAAB OPTIMIZER ANALYTICS ENGINE
  * Pure client-side analytical core for real-time roster diffing,
  * net roster delta calculations, streaming scores, contingent handcuff indexing,
@@ -14,12 +14,88 @@ export class WaiverEngine {
   }
 
   /**
+   * Real-Time Injury & Role Inheritance Engine ("Next Man Up")
+   * Scans master players for sidelined depth-chart starters and redistributes workload to backups.
+   */
+  computeRoleInheritance(allPlayersMap = {}, weekProjections = {}) {
+    const playersList = Array.isArray(allPlayersMap) ? allPlayersMap : Object.values(allPlayersMap);
+    const inheritanceMap = new Map(); // Key: promotedPlayerId -> Inheritance Data
+
+    const sidelinedStatuses = new Set(['OUT', 'IR', 'PUP', 'DOUBTFUL', 'SUSPENDED', 'INACTIVE']);
+
+    // Step 1: Identify all sidelined starters (depth_chart_order: 1 or high projection starter)
+    const sidelinedStarters = playersList.filter(p => {
+      if (!p || !p.team || !p.position) return false;
+      const status = (p.status || '').toUpperCase();
+      const injStatus = (p.injury_status || '').toUpperCase();
+      const isSidelined = sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus);
+      const isStarter = p.depth_chart_order === 1 || (p.projected_pts && p.projected_pts >= 11.0);
+      return isSidelined && isStarter && ['RB', 'WR', 'TE'].includes(p.position);
+    });
+
+    // Step 2: For each sidelined starter, calculate workload transfer to backup
+    sidelinedStarters.forEach(starter => {
+      const starterProj = weekProjections[starter.player_id] !== undefined
+        ? Number(weekProjections[starter.player_id])
+        : (Number(starter.projected_pts) || 14.0);
+
+      // Find active backups on same team & position
+      const teamBackups = playersList.filter(p => 
+        p && p.team === starter.team && 
+        p.position === starter.position && 
+        p.player_id !== starter.player_id &&
+        !sidelinedStatuses.has((p.status || '').toUpperCase()) &&
+        !sidelinedStatuses.has((p.injury_status || '').toUpperCase())
+      );
+
+      // Sort by depth chart order
+      teamBackups.sort((a, b) => (Number(a.depth_chart_order) || 99) - (Number(b.depth_chart_order) || 99));
+
+      if (teamBackups.length > 0) {
+        const primaryBackup = teamBackups[0];
+        let inheritedProj = 0;
+        let roleDesc = '';
+
+        if (starter.position === 'RB') {
+          // Running Back: Inherits 70% of starter baseline volume
+          inheritedProj = Math.max(12.2, Number((starterProj * 0.70).toFixed(1)));
+          roleDesc = `Inherited ${starter.full_name || 'RB1'} Lead Workload`;
+        } else if (starter.position === 'WR') {
+          // Wide Receiver: Inherits 35% vacated target equity
+          inheritedProj = Number(((weekProjections[primaryBackup.player_id] || primaryBackup.projected_pts || 7.0) + (starterProj * 0.35)).toFixed(1));
+          roleDesc = `Inherited ${starter.full_name || 'WR1'} Target Share`;
+        } else if (starter.position === 'TE') {
+          // Tight End: Inherits 50% vacated target equity
+          inheritedProj = Number(((weekProjections[primaryBackup.player_id] || primaryBackup.projected_pts || 5.0) + (starterProj * 0.50)).toFixed(1));
+          roleDesc = `Inherited ${starter.full_name || 'TE1'} Route Equity`;
+        }
+
+        inheritanceMap.set(String(primaryBackup.player_id), {
+          promotedPlayerId: String(primaryBackup.player_id),
+          starterName: starter.full_name || 'Starter',
+          starterPos: starter.position,
+          starterTeam: starter.team,
+          starterProj,
+          inheritedProj,
+          roleDesc,
+          isNextManUp: true
+        });
+      }
+    });
+
+    return inheritanceMap;
+  }
+
+  /**
    * Extract unowned free agents from master player pool and league rosters
    */
   extractFreeAgents(allPlayersMap, rosters = [], weekProjections = {}) {
     if (!allPlayersMap || typeof allPlayersMap !== 'object') return [];
 
-    // Step 1: Build Set of all currently rostered player IDs across the league
+    // Step 1: Compute Real-Time Role Inheritances ("Next Man Up")
+    const inheritanceMap = this.computeRoleInheritance(allPlayersMap, weekProjections);
+
+    // Step 2: Build Set of all currently rostered player IDs across the league
     const rosteredIds = new Set();
     if (Array.isArray(rosters)) {
       rosters.forEach(r => {
@@ -47,20 +123,29 @@ export class WaiverEngine {
       if (!rosteredIds.has(pid)) {
         const pos = player.position || 'FLEX';
         if (pos === 'FLEX' || ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(pos)) {
-          const proj = weekProjections[pid] !== undefined 
+          const rawProj = weekProjections[pid] !== undefined 
             ? Number(weekProjections[pid]) 
             : (Number(player.projected_pts) || 0);
 
-          // Calculate Contingent Handcuff Score (1-100)
-          const contingentScore = this.calculateContingentUpside(player);
+          // Check if this player inherited a starting role
+          const inheritance = inheritanceMap.get(pid) || null;
+          const finalProj = inheritance 
+            ? Math.max(rawProj, inheritance.inheritedProj)
+            : rawProj;
 
-          // Exclude extreme long-tail inactive noise unless high contingent upside
-          if (proj >= this.options.minProjectionThreshold || contingentScore >= 65 || pos === 'DEF') {
+          // Calculate Contingent Handcuff Score (1-100)
+          const contingentScore = inheritance ? 96 : this.calculateContingentUpside(player);
+
+          // Exclude extreme long-tail inactive noise unless high contingent upside / Next Man Up
+          if (finalProj >= this.options.minProjectionThreshold || contingentScore >= 65 || pos === 'DEF' || inheritance) {
             freeAgents.push({
               ...player,
               player_id: pid,
-              projected_pts: Number(proj.toFixed(1)),
+              raw_projected_pts: Number(rawProj.toFixed(1)),
+              projected_pts: Number(finalProj.toFixed(1)),
               contingent_score: contingentScore,
+              inheritance,
+              isNextManUp: inheritance !== null,
               is_free_agent: true
             });
           }
@@ -195,10 +280,13 @@ export class WaiverEngine {
 
       // Determine Badges
       const badges = [];
+      if (fa.isNextManUp && fa.inheritance) {
+        badges.push({ type: 'next_man_up', label: `🚨 Next Man Up: ${fa.inheritance.roleDesc}` });
+      }
       if (streamingScore >= 75) {
         badges.push({ type: 'streamer', label: '🛡️ High-Floor Streamer' });
       }
-      if (fa.contingent_score >= 80) {
+      if (fa.contingent_score >= 80 && !fa.isNextManUp) {
         badges.push({ type: 'handcuff', label: '🔥 Contingent Handcuff' });
       }
       if (netDelta >= 3.5) {
@@ -313,8 +401,16 @@ export class WaiverEngine {
     let targetPct = 0.10;
     let specPct = 0.03;
 
-    // High Net Delta or High Handcuff Score increases bid recommendation
-    if (netDelta >= 4.0 || player.contingent_score >= 90) {
+    // Next Man Up (Inherited Starter Role) triggers top-tier aggressive bidding
+    if (player.isNextManUp && player.position === 'RB') {
+      aggPct = 0.45;
+      targetPct = 0.25;
+      specPct = 0.08;
+    } else if (player.isNextManUp) {
+      aggPct = 0.35;
+      targetPct = 0.18;
+      specPct = 0.05;
+    } else if (netDelta >= 4.0 || player.contingent_score >= 90) {
       aggPct = 0.32;
       targetPct = 0.16;
       specPct = 0.05;

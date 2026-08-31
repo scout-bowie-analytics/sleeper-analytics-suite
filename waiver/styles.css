@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    WAIVER WIRE RADAR & FAAB OPTIMIZER STYLES
    Clean, focused, high-contrast glassmorphic design system
    ========================================================================== */
@@ -236,6 +236,25 @@
   padding: 2px 6px;
   border-radius: 4px;
   text-transform: uppercase;
+}
+
+.badge-next-man-up {
+  background: rgba(239, 68, 68, 0.22);
+  border: 1px solid #ef4444;
+  color: #fecaca;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+  animation: nextManPulse 2.5s infinite ease-in-out;
+}
+
+@keyframes nextManPulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.35);
+    border-color: #ef4444;
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.7);
+    border-color: #f59e0b;
+  }
 }
 
 .badge-golden-bone {
