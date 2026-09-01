@@ -2491,7 +2491,6 @@ class WeeklyOptimizerController {
       `;
     }).join('');
   }
-  }
 
   /**
    * Two-Way Dropdown Swap Handler (Two-Stage Preview & Confirm)
