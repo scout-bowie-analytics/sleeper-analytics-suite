@@ -123,8 +123,15 @@ export class WaiverEngine {
             if (pid) rosteredIds.add(String(pid));
           });
         }
+        if (Array.isArray(r.taxi)) {
+          r.taxi.forEach(pid => {
+            if (pid) rosteredIds.add(String(pid));
+          });
+        }
       });
     }
+
+    const isRealLeague = Array.from(rosteredIds).some(id => /^\d+$/.test(id));
 
     const freeAgents = [];
     const playersList = Array.isArray(allPlayersMap) ? allPlayersMap : Object.values(allPlayersMap);
@@ -132,6 +139,9 @@ export class WaiverEngine {
     playersList.forEach(player => {
       if (!player || !player.player_id) return;
       const pid = String(player.player_id);
+
+      // In a real Sleeper league with numeric IDs, skip synthetic mock IDs (p_*)
+      if (isRealLeague && pid.startsWith('p_')) return;
 
       // Must not be rostered and must be an active NFL asset
       if (!rosteredIds.has(pid)) {

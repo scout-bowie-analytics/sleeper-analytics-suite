@@ -2930,8 +2930,11 @@ class WeeklyOptimizerController {
         allPlayersMap = await sleeperApi.fetchAllPlayers().catch(() => ({}));
       }
 
-      // Merge mock databases and current user resolved players
-      allPlayersMap = { ...MOCK_PLAYERS_DB, ...allPlayersMap };
+      const isDemo = Boolean(this.state.isDemoMode || this.state.currentLeague?.league_id === 'demo_championship_league_2025' || Object.keys(allPlayersMap).length === 0);
+      if (isDemo) {
+        allPlayersMap = { ...MOCK_PLAYERS_DB, ...allPlayersMap };
+      }
+
       const allRosterPool = [
         ...(this.state.userPlayers || []),
         ...(this.state.userStarters || []),
@@ -2942,6 +2945,13 @@ class WeeklyOptimizerController {
           allPlayersMap[String(p.player_id)] = p;
         }
       });
+
+      // Ensure full league rosters are loaded
+      let leagueRosters = this.state.leagueRosters;
+      if ((!leagueRosters || leagueRosters.length === 0) && this.state.currentLeague?.league_id && !isDemo) {
+        leagueRosters = await sleeperApi.getRosters(this.state.currentLeague.league_id).catch(() => []);
+        this.state.leagueRosters = leagueRosters;
+      }
 
       // Live 24h Trending Adds & Drops
       const [trendingAdds, trendingDrops] = await Promise.all([
@@ -2974,10 +2984,10 @@ class WeeklyOptimizerController {
       );
       this.state.userAnalysis = userAnalysis;
 
-      // Extract Free Agent Pool
+      // Extract Free Agent Pool (accurately excluding all rostered players across every team)
       const freeAgents = this.waiverEngine.extractFreeAgents(
         allPlayersMap,
-        this.state.leagueRosters || [userRosterObj],
+        leagueRosters || [userRosterObj],
         {},
         trendingAddsMap,
         trendingDropsMap
