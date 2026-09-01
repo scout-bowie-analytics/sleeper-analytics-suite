@@ -1670,6 +1670,7 @@ class WeeklyOptimizerController {
       this.state.leagueUsers = users;
       this.state.liveSchedule = liveSchedule;
       this.state.liveOdds = liveOdds;
+      this.state.projections = projections;
 
       // 3. Find User Roster and Opponent Roster
       const userRoster = rosters.find(r => r.roster_id === userRosterId) || rosters[0];
@@ -2969,6 +2970,9 @@ class WeeklyOptimizerController {
         if (item && item.player_id) trendingDropsMap[item.player_id] = item.count;
       });
 
+      const projections = this.state.projections || {};
+      const scoringSettings = this.state.league?.scoring_settings || null;
+
       // Extract User Analysis from weekly roster
       const userRosterObj = this.state.userRoster || {
         starters: (this.state.userStarters || []).map(p => p.player_id),
@@ -2979,8 +2983,9 @@ class WeeklyOptimizerController {
       const userAnalysis = this.waiverEngine.analyzeUserRoster(
         userRosterObj,
         allPlayersMap,
-        {},
-        trendingDropsMap
+        projections,
+        trendingDropsMap,
+        scoringSettings
       );
       this.state.userAnalysis = userAnalysis;
 
@@ -2988,9 +2993,10 @@ class WeeklyOptimizerController {
       const freeAgents = this.waiverEngine.extractFreeAgents(
         allPlayersMap,
         leagueRosters || [userRosterObj],
-        {},
+        projections,
         trendingAddsMap,
-        trendingDropsMap
+        trendingDropsMap,
+        scoringSettings
       );
 
       // Process Net Deltas, FAAB Bids, and Streaming Matrix

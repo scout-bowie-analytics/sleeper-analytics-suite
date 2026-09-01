@@ -103,7 +103,7 @@ export class WaiverEngine {
   /**
    * Extract unowned free agents from master player pool and league rosters
    */
-  extractFreeAgents(allPlayersMap, rosters = [], weekProjections = {}, trendingAddsMap = {}, trendingDropsMap = {}) {
+  extractFreeAgents(allPlayersMap, rosters = [], weekProjections = {}, trendingAddsMap = {}, trendingDropsMap = {}, scoringSettings = null) {
     if (!allPlayersMap || typeof allPlayersMap !== 'object') return [];
 
     // Step 1: Compute Real-Time Role Inheritances ("Next Man Up")
@@ -157,18 +157,14 @@ export class WaiverEngine {
           // If player is not on an NFL team or is on IR/PUP/OUT, projection MUST be 0.0 pts
           let rawProj = 0;
           if (hasNflTeam && !isSidelined) {
-            if (weekProjections[pid] !== undefined && Number(weekProjections[pid]) > 0) {
+            if (weekProjections && weekProjections[pid] !== undefined && Number(weekProjections[pid]) > 0) {
               rawProj = Number(weekProjections[pid]);
             } else if (player.projected_pts !== undefined && Number(player.projected_pts) > 0) {
               rawProj = Number(player.projected_pts);
             } else if (player.projected_points !== undefined && Number(player.projected_points) > 0) {
               rawProj = Number(player.projected_points);
-            } else if (pos === 'DEF') {
-              rawProj = 7.0 + (['SF', 'BAL', 'NYJ', 'CLE', 'DAL', 'KC', 'BUF', 'PHI'].includes(player.team || pid) ? 1.5 : 0);
-            } else if (pos === 'K') {
-              rawProj = 7.2;
             } else {
-              rawProj = 0;
+              rawProj = this.estimatePlayerProjection(player, scoringSettings);
             }
           }
 
@@ -247,7 +243,7 @@ export class WaiverEngine {
   /**
    * Analyze user's current roster to identify starters, bench depth, cut candidates, and IR lock risks
    */
-  analyzeUserRoster(userRoster, allPlayersMap = {}, weekProjections = {}, trendingDropsMap = {}) {
+  analyzeUserRoster(userRoster, allPlayersMap = {}, weekProjections = {}, trendingDropsMap = {}, scoringSettings = null) {
     if (!userRoster || !Array.isArray(userRoster.players)) {
       return {
         starters: [],
@@ -305,9 +301,15 @@ export class WaiverEngine {
 
       let proj = 0;
       if (hasNflTeam && !isSidelined) {
-        proj = weekProjections[pid] !== undefined 
-          ? Number(weekProjections[pid]) 
-          : (Number(player.projected_pts) || 0);
+        if (weekProjections && weekProjections[pid] !== undefined && Number(weekProjections[pid]) > 0) {
+          proj = Number(weekProjections[pid]);
+        } else if (player.projected_pts !== undefined && Number(player.projected_pts) > 0) {
+          proj = Number(player.projected_pts);
+        } else if (player.projected_points !== undefined && Number(player.projected_points) > 0) {
+          proj = Number(player.projected_points);
+        } else {
+          proj = this.estimatePlayerProjection(player, scoringSettings);
+        }
       }
 
       const dropCount = Number(trendingDropsMap[pid] ?? player.trending_drops ?? 0);
@@ -577,6 +579,68 @@ export class WaiverEngine {
     if (pos === 'RB') return 58;
     if (pos === 'WR') return 52;
     return 30;
+  }
+
+  /**
+   * Baseline Player Projection Estimator (when external projections feed is missing or off-season)
+   */
+  estimatePlayerProjection(player, scoringSettings = null) {
+    if (!player) return 0.0;
+    const team = (player.team || '').trim();
+    if (!team || team === 'FA' || team === 'None' || team === 'FA*') return 0.0;
+
+    const status = (player.status || '').toUpperCase();
+    const injStatus = (player.injury_status || '').toUpperCase();
+    const sidelinedStatuses = new Set(['IR', 'PUP', 'OUT', 'SUSPENDED', 'INACTIVE', 'FREE AGENT', 'RETIRED', 'DNR']);
+    if (sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus)) return 0.0;
+
+    const pos = player.position || (player.fantasy_positions && player.fantasy_positions[0]) || 'FLEX';
+    const hasExplicitOrder = player.depth_chart_order !== null && player.depth_chart_order !== undefined && !isNaN(Number(player.depth_chart_order));
+    const order = hasExplicitOrder ? Number(player.depth_chart_order) : 4;
+    const ppr = scoringSettings?.rec !== undefined ? scoringSettings.rec : 1.0;
+
+    // Deterministic pseudo-random variation based on player name/ID
+    let hash = 0;
+    const str = String(player.player_id || player.full_name || player.name || '100');
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    const pseudoRand = (Math.abs(hash) % 100) / 100; // 0.00 to 0.99
+
+    switch (pos) {
+      case 'QB':
+        if (order === 1) return Number((16.5 + pseudoRand * 5.5).toFixed(1));
+        if (order === 2) return Number((4.5 + pseudoRand * 3.5).toFixed(1));
+        return Number((1.5 + pseudoRand * 2.0).toFixed(1));
+
+      case 'RB':
+        if (order === 1) return Number((12.5 + pseudoRand * 5.5 + ppr * 2.0).toFixed(1));
+        if (order === 2) return Number((6.8 + pseudoRand * 3.8 + ppr * 1.2).toFixed(1));
+        if (order === 3) return Number((3.5 + pseudoRand * 2.5).toFixed(1));
+        return Number((1.2 + pseudoRand * 1.5).toFixed(1));
+
+      case 'WR':
+        if (order === 1) return Number((11.5 + pseudoRand * 5.5 + ppr * 3.0).toFixed(1));
+        if (order === 2) return Number((8.2 + pseudoRand * 3.8 + ppr * 2.0).toFixed(1));
+        if (order === 3) return Number((5.5 + pseudoRand * 3.0 + ppr * 1.2).toFixed(1));
+        return Number((2.0 + pseudoRand * 2.0).toFixed(1));
+
+      case 'TE':
+        if (order === 1) return Number((7.8 + pseudoRand * 5.0 + ppr * 2.2).toFixed(1));
+        if (order === 2) return Number((3.5 + pseudoRand * 2.5 + ppr * 0.8).toFixed(1));
+        return Number((1.2 + pseudoRand * 1.5).toFixed(1));
+
+      case 'K':
+        return Number((7.0 + pseudoRand * 3.0).toFixed(1));
+
+      case 'DEF':
+        const isEliteDef = ['SF', 'BAL', 'NYJ', 'CLE', 'DAL', 'KC', 'BUF', 'PHI'].includes(player.team || player.player_id);
+        return Number((isEliteDef ? 8.5 : (6.5 + pseudoRand * 2.0)).toFixed(1));
+
+      default:
+        return Number((5.0 + pseudoRand * 3.0).toFixed(1));
+    }
   }
 
   /**
