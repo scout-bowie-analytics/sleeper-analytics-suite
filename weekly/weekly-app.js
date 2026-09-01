@@ -2930,10 +2930,18 @@ class WeeklyOptimizerController {
         allPlayersMap = await sleeperApi.fetchAllPlayers().catch(() => ({}));
       }
 
-      // If still empty, merge mock databases
-      if (Object.keys(allPlayersMap).length === 0) {
-        allPlayersMap = { ...MOCK_PLAYERS_DB };
-      }
+      // Merge mock databases and current user resolved players
+      allPlayersMap = { ...MOCK_PLAYERS_DB, ...allPlayersMap };
+      const allRosterPool = [
+        ...(this.state.userPlayers || []),
+        ...(this.state.userStarters || []),
+        ...(this.state.userBench || [])
+      ];
+      allRosterPool.forEach(p => {
+        if (p && p.player_id) {
+          allPlayersMap[String(p.player_id)] = p;
+        }
+      });
 
       // Live 24h Trending Adds & Drops
       const [trendingAdds, trendingDrops] = await Promise.all([
@@ -3033,6 +3041,7 @@ class WeeklyOptimizerController {
 
   openWaiverDrawer() {
     this.state.isWaiverDrawerOpen = true;
+    document.body.classList.add('waiver-drawer-open');
     document.getElementById('waiverDrawerOverlay')?.classList.add('active');
     document.getElementById('waiverRadarDrawer')?.classList.add('active');
     if (!this.state.waiverTargets || this.state.waiverTargets.length === 0) {
@@ -3044,6 +3053,7 @@ class WeeklyOptimizerController {
 
   closeWaiverDrawer() {
     this.state.isWaiverDrawerOpen = false;
+    document.body.classList.remove('waiver-drawer-open');
     document.getElementById('waiverDrawerOverlay')?.classList.remove('active');
     document.getElementById('waiverRadarDrawer')?.classList.remove('active');
   }
@@ -3158,7 +3168,7 @@ class WeeklyOptimizerController {
     } else if (sort === 'proj_desc') {
       list.sort((a, b) => b.projected_pts - a.projected_pts);
     } else if (sort === 'faab_desc') {
-      list.sort((a, b) => (b.faabBids?.aggressive || 0) - (a.faabBids?.aggressive || 0));
+      list.sort((a, b) => (b.faabBids?.aggressive?.dollars || 0) - (a.faabBids?.aggressive?.dollars || 0));
     } else if (sort === 'handcuff_desc') {
       list.sort((a, b) => (b.contingent_score || 0) - (a.contingent_score || 0));
     }
@@ -3184,38 +3194,41 @@ class WeeklyOptimizerController {
         dropTickerHtml = `<span class="ticker-pill ticker-down" title="${player.suggestedDrop.player.trend.count} drops in 24h">${player.suggestedDrop.player.trend.formatted}</span>`;
       }
 
+      const targetedBid = player.faabBids?.targeted?.dollars ?? 1;
+      const targetedPct = player.faabBids?.targeted?.percent ?? 1;
+
       return `
-        <div class="waiver-card ${player.isGoldenBone ? 'golden-bone-card' : ''}" style="padding:12px 14px;background:rgba(22,29,43,0.7);border-radius:10px;margin-bottom:8px;">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <img src="${player.avatar || 'https://sleepercdn.com/images/v2/icons/player_default.webp'}" class="waiver-player-avatar" style="width:38px;height:38px;border-radius:50%;object-fit:cover;" onerror="this.onerror=null; this.src='https://sleepercdn.com/images/v2/icons/player_default.webp';" alt="${player.full_name}">
-              <div>
-                <div style="font-size:13px;font-weight:700;color:#fff;display:flex;align-items:center;gap:6px;">
-                  <span>${player.full_name || player.name}</span>
+        <div class="drawer-waiver-card ${player.isGoldenBone ? 'golden-bone-card' : ''}">
+          <div class="drawer-card-top-row">
+            <div class="drawer-card-player-info">
+              <img src="${player.avatar || 'https://sleepercdn.com/images/v2/icons/player_default.webp'}" class="waiver-player-avatar" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null; this.src='https://sleepercdn.com/images/v2/icons/player_default.webp';" alt="${player.full_name}">
+              <div style="min-width:0;flex:1;">
+                <div class="drawer-player-name-row">
+                  <span class="drawer-player-name">${player.full_name || player.name}</span>
                   ${tickerHtml}
                 </div>
-                <div style="font-size:11px;color:var(--muted);margin-top:1px;">
-                  <span class="pos-tag pos-${player.position}" style="font-size:9.5px;padding:1px 4px;">${player.position}</span>
+                <div class="drawer-player-meta">
+                  <span class="pos-tag pos-${player.position}" style="font-size:9.5px;padding:1px 5px;">${player.position}</span>
                   <span>${player.team || 'FA'}</span>
-                  &middot;
+                  <span>&bull;</span>
                   <span style="color:var(--text);font-weight:700;">${player.projected_pts} pts</span>
                 </div>
               </div>
             </div>
 
-            <div class="net-delta-pill ${deltaClass}" style="font-size:12px;padding:3px 8px;font-weight:800;border-radius:6px;">
+            <div class="net-delta-pill ${deltaClass}" style="flex-shrink:0;font-size:12px;padding:4px 10px;font-weight:800;border-radius:6px;white-space:nowrap;">
               <span>NET: ${deltaPrefix}${player.netDelta} PTS</span>
             </div>
           </div>
 
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;">
-            <div style="color:var(--text);display:flex;align-items:center;gap:4px;">
-              <span style="color:var(--muted);">Suggested:</span>
-              <span style="font-weight:600;">${player.suggestedDrop?.text || 'Add to Bench'}</span>
+          <div class="drawer-card-bottom-row">
+            <div class="drawer-suggested-drop">
+              <span style="color:var(--muted);font-weight:500;">Suggested:</span>
+              <span style="font-weight:700;color:#fff;">${player.suggestedDrop?.text || 'Add to Bench'}</span>
               ${dropTickerHtml}
             </div>
-            <div style="color:var(--gold);font-weight:700;font-family:var(--font-mono, monospace);">
-              FAAB: $${player.faabBids?.targeted || 1} (${Math.round((player.faabBids?.targeted || 1) / Math.max(1, this.state.waiverFaab) * 100)}%)
+            <div class="drawer-faab-bid">
+              FAAB: $${targetedBid} (${targetedPct}%)
             </div>
           </div>
         </div>
