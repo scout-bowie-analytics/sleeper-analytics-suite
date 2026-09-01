@@ -3197,8 +3197,13 @@ class WeeklyOptimizerController {
     // Limit to top 30 in drawer for optimal DOM performance
     const renderList = list.slice(0, 30);
     container.innerHTML = renderList.map(player => {
-      const deltaClass = player.netDelta > 0 ? 'delta-positive' : player.netDelta < 0 ? 'delta-negative' : 'delta-neutral';
       const deltaPrefix = player.netDelta > 0 ? '+' : '';
+      let netNumClass = 'net-val-neutral';
+      if (player.netDelta > 1.5) {
+        netNumClass = 'net-val-positive';
+      } else if (player.netDelta < -1.5) {
+        netNumClass = 'net-val-negative';
+      }
       
       let tickerHtml = '';
       if (player.trend && player.trend.type === 'UP') {
@@ -3237,8 +3242,8 @@ class WeeklyOptimizerController {
               </div>
             </div>
 
-            <div class="net-delta-pill ${deltaClass}" style="flex-shrink:0;font-size:12px;padding:4px 10px;font-weight:800;border-radius:6px;white-space:nowrap;">
-              <span>NET: ${deltaPrefix}${player.netDelta} PTS</span>
+            <div class="drawer-net-delta" style="flex-shrink:0;font-size:12.5px;font-family:var(--font-mono, monospace);white-space:nowrap;">
+              <span style="color:var(--muted);font-weight:600;">NET:</span> <span class="${netNumClass}">${deltaPrefix}${player.netDelta} PTS</span>
             </div>
           </div>
 

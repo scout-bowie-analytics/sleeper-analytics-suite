@@ -1139,4 +1139,22 @@ kbd {
   transform: translateY(-1px);
 }
 
+/* Dynamic Threshold Coloring for NET Numbers */
+.net-val-positive {
+  color: #10b981 !important; /* Emerald Green (> +1.5 pts) */
+  font-weight: 800;
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
+.net-val-negative {
+  color: #ef4444 !important; /* Crimson Red (< -1.5 pts) */
+  font-weight: 800;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+}
+
+.net-val-neutral {
+  color: #cbd5e1 !important; /* Default / Neutral White-Slate for [-1.5 to +1.5] */
+  font-weight: 700;
+}
+
 

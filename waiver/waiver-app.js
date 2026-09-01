@@ -477,8 +477,13 @@ class WaiverApp {
         return `<span class="waiver-badge ${badgeClass}">${b.label}</span>`;
       }).join('');
 
-      const deltaClass = item.netDelta > 0 ? 'net-delta-positive' : 'net-delta-neutral';
       const deltaPrefix = item.netDelta > 0 ? `+${item.netDelta}` : `${item.netDelta}`;
+      let netNumClass = 'net-val-neutral';
+      if (item.netDelta > 1.5) {
+        netNumClass = 'net-val-positive';
+      } else if (item.netDelta < -1.5) {
+        netNumClass = 'net-val-negative';
+      }
       
       // Check if suggested drop candidate has high drops
       let dropPlayerText = item.suggestedDrop ? item.suggestedDrop.text : 'Drop Bench Asset';
@@ -539,7 +544,7 @@ class WaiverApp {
           <div class="suggested-drop-card">
             <div class="drop-header-row">
               <span>Suggested Action</span>
-              <span class="net-delta-pill ${deltaClass}">Net: ${deltaPrefix} pts</span>
+              <span class="net-delta-pill">Net: <span class="${netNumClass}">${deltaPrefix} pts</span></span>
             </div>
             <div class="drop-player-name">${dropPlayerText}</div>
           </div>
