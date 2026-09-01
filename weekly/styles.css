@@ -1246,4 +1246,86 @@ kbd {
   color: #e2e8f0;
 }
 
+/* ==========================================================================
+   MOBILE ERGONOMICS & RESPONSIVE POLISH
+   ========================================================================== */
+@media (max-width: 768px) {
+  .waiver-radar-drawer {
+    width: 100vw;
+    max-width: 100vw;
+    border-left: none;
+  }
+  
+  .optimizer-scoreboard {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+
+  .team-display {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .team-display:last-child {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .preview-delta-bar {
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+
+  .preview-delta-pill {
+    font-size: 9.5px;
+    padding: 1.5px 5px;
+  }
+
+  .btn-ghost-cancel, .btn-ghost-confirm {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+
+  .market-velocity-chips {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .drawer-card-top-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .drawer-player-name {
+    font-size: 12.5px;
+  }
+
+  .smart-faab-card {
+    padding: 6px 10px;
+  }
+
+  .smart-faab-value {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  #leagueTitle {
+    font-size: 17px !important;
+  }
+  
+  .live-indicator {
+    font-size: 10px !important;
+    padding: 2px 7px !important;
+  }
+  
+  .filter-pills-group {
+    gap: 3px !important;
+  }
+}
+
 

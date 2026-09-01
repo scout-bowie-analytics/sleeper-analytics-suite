@@ -719,6 +719,7 @@ class WeeklyOptimizerController {
     this.state.isDemoMode = false;
     this.state.isLiveDemo = false;
     this.state.isLiveGamedayMode = false;
+    this.state.isImportedMatchup = true;
 
     const userTeamName = payload.userTeamName || 'Your Fantasy Team';
     const oppTeamName = payload.oppTeamName || 'Opponent Team';
@@ -1660,6 +1661,7 @@ class WeeklyOptimizerController {
    */
   async loadMatchupData(league, week, userRosterId = 1) {
     try {
+      this.state.isImportedMatchup = false;
       // 1. Guard: Ensure player database is loaded
       await sleeperApi.loadPlayersDatabase();
 
@@ -3039,6 +3041,16 @@ class WeeklyOptimizerController {
 
   async loadWaiverTargets() {
     try {
+      const waiverBtn = document.getElementById('btnOpenWaiverDrawer');
+      if (this.state.isImportedMatchup) {
+        // ESPN / Yahoo / Custom imports only sync the 2 matchup rosters without league waiver wire databases
+        if (waiverBtn) waiverBtn.style.display = 'none';
+        if (this.state.isWaiverDrawerOpen) this.closeWaiverDrawer();
+        return;
+      } else {
+        if (waiverBtn) waiverBtn.style.display = 'inline-flex';
+      }
+
       if (!this.waiverEngine) {
         this.waiverEngine = new WaiverEngine();
       }
