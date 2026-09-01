@@ -1127,12 +1127,6 @@ kbd {
   font-size: 12px;
 }
 
-.floating-waiver-trigger:hover {
-  transform: translateY(-2px) scale(1.02);
-  border-color: var(--gold);
-  box-shadow: 0 10px 28px rgba(0,0,0,0.6), 0 0 18px rgba(234,179,8,0.35);
-}
-
 .btn-open-waiver-drawer:hover {
   background: rgba(234, 179, 8, 0.22) !important;
   border-color: rgba(234, 179, 8, 0.6) !important;
