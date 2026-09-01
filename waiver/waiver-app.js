@@ -44,6 +44,7 @@ class WaiverApp {
     window.onFilterCategory = (filter) => this.onFilterCategory(filter);
     window.onSortChanged = () => this.onSortChanged();
     window.onSearchInput = () => this.onSearchInput();
+    window.onSearchPlayer = (name) => this.onSearchPlayer(name);
     window.onFaabBudgetChanged = () => this.onFaabBudgetChanged();
     window.copyClaimPriorityList = () => this.copyClaimPriorityList();
     window.triggerBowieEasterEgg = (el) => this.triggerBowieEasterEgg(el);
@@ -282,17 +283,37 @@ class WaiverApp {
     // Scout Bowie Contextual Reaction
     const irLock = this.state.userAnalysis && this.state.userAnalysis.hasIrLockWarning;
     const nextManUp = this.state.processedTargets.find(p => p.isNextManUp && p.inheritance);
-    const topTrend = this.state.processedTargets.find(p => p.trend && p.trend.type === 'UP' && p.trend.count >= 100000);
     const tipEl = document.getElementById('bowieRadarTip');
     if (tipEl) {
       if (irLock) {
         tipEl.innerHTML = `<strong style="color:#f59e0b;">⚠️ ROSTER LOCK WARNING:</strong> <span style="color:#fde68a;">${this.state.userAnalysis.lockedPlayer.full_name}</span> is now listed as <strong>${this.state.userAnalysis.lockedPlayer.currentStatus}</strong> in your IR slot! Remove them before submitting waiver claims or Sleeper will block your moves. 🐾`;
       } else if (nextManUp) {
         tipEl.innerHTML = `<strong>🚨 NEXT MAN UP ALERT:</strong> <span style="color:#fca5a5;">${nextManUp.full_name} (${nextManUp.position})</span> has inherited ${nextManUp.inheritance.roleDesc}! Bumping projection to ${nextManUp.projected_pts} pts and scaling FAAB bid to Must-Add. 🐾`;
-      } else if (topTrend) {
-        tipEl.innerHTML = `<strong>📈 MARKET VELOCITY:</strong> <span style="color:#4ade80;">${topTrend.full_name}</span> is exploding across Sleeper with <strong style="color:#86efac;">${topTrend.trend.formatted} adds</strong> in the last 24h! 🐾`;
       } else {
         tipEl.textContent = `"Scanning available free agents against your bench. Prioritizing positive net projection upgrades, streaming matchups, and high-contingent handcuffs." 🐾`;
+      }
+    }
+
+    // Render Dedicated Market Velocity Container
+    const topTrending = this.state.processedTargets
+      .filter(p => p.trending_adds && p.trending_adds >= 5000)
+      .sort((a, b) => (b.trending_adds || 0) - (a.trending_adds || 0))
+      .slice(0, 8);
+
+    const velBanner = document.getElementById('marketVelocityBanner');
+    const velChips = document.getElementById('marketVelocityChips');
+    if (velBanner && velChips) {
+      if (topTrending.length > 0) {
+        velChips.innerHTML = topTrending.map(p => `
+          <button class="market-velocity-chip" onclick="onSearchPlayer('${(p.full_name || p.name || '').replace(/'/g, "\\'")}')" title="Click to filter to ${p.full_name}">
+            <span>${p.full_name || p.name}</span>
+            <span style="font-size:10px;color:var(--muted);">${p.position} - ${p.team || 'FA'}</span>
+            <span class="chip-adds">▲ +${this.engine.formatTrendingCount(p.trending_adds)}</span>
+          </button>
+        `).join('');
+        velBanner.style.display = 'flex';
+      } else {
+        velBanner.style.display = 'none';
       }
     }
 
@@ -340,6 +361,15 @@ class WaiverApp {
     if (searchInput) {
       this.state.searchQuery = searchInput.value.toLowerCase().trim();
       this.applyFiltersAndSort();
+    }
+  }
+
+  onSearchPlayer(name) {
+    const searchInput = document.getElementById('waiverSearch');
+    if (searchInput) {
+      searchInput.value = name;
+      this.onSearchInput();
+      this.showToast(`Filtering for ${name} 🐾`);
     }
   }
 
