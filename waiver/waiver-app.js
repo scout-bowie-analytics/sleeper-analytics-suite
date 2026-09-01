@@ -278,13 +278,34 @@ class WaiverApp {
       if (faabInput) faabInput.value = remainingFaab;
     }
 
-    // Check if current league state is Week 0 / Pre-Season (where everyone is a Free Add)
+    // Fetch NFL state to check season kickoff dates
+    let nflState = this.state.nflState;
+    if (!nflState) {
+      try {
+        nflState = await this.api.getNflState();
+        this.state.nflState = nflState;
+      } catch (e) {
+        nflState = null;
+      }
+    }
+
+    const now = new Date();
+    const seasonStartDate = nflState?.season_start_date ? new Date(nflState.season_start_date) : null;
+    const isBeforeKickoff = seasonStartDate ? (now < seasonStartDate) : true;
     const leagueStatus = this.state.currentLeague?.status || '';
-    const currentWeek = Number(this.state.currentLeague?.settings?.leg ?? 0);
-    const isWeek0 = leagueStatus === 'pre_draft' || 
+    const currentWeek = Number(this.state.currentLeague?.settings?.leg ?? nflState?.week ?? 1);
+    const isPreSeasonType = nflState?.season_type === 'pre' || this.state.currentLeague?.season_type === 'pre';
+    
+    // Check if league has had 0 fantasy points scored yet across all teams (pre-kickoff)
+    const leagueHasNoPoints = Array.isArray(this.state.rosters) 
+      ? this.state.rosters.every(r => (r.settings?.fpts ?? 0) === 0)
+      : true;
+
+    const isWeek0 = isBeforeKickoff || 
+                    isPreSeasonType || 
+                    leagueStatus === 'pre_draft' || 
                     leagueStatus === 'drafting' || 
-                    (leagueStatus === 'complete' && currentWeek === 0) || 
-                    (currentWeek <= 1 && (this.state.currentLeague?.season_type === 'pre' || !this.state.currentLeague?.settings?.leg || this.state.currentLeague?.settings?.leg === 0));
+                    (currentWeek <= 1 && leagueHasNoPoints);
 
     // Fetch historical waiver transactions if in-season
     let historicalTransactions = [];
