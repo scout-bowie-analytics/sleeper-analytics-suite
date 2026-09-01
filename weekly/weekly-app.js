@@ -3074,7 +3074,14 @@ class WeeklyOptimizerController {
     document.getElementById('waiverRadarDrawer')?.classList.remove('active');
   }
 
+  clearDrawerSearch() {
+    const input = document.getElementById('drawerWaiverSearch');
+    if (input) input.value = '';
+    this.state.waiverSearchQuery = '';
+  }
+
   onDrawerStrategyToggle(strategy) {
+    this.clearDrawerSearch();
     if (this.state.selectedWaiverStrategy === strategy) {
       this.state.selectedWaiverStrategy = null;
     } else {
@@ -3087,6 +3094,7 @@ class WeeklyOptimizerController {
   }
 
   onDrawerPosFilter(pos) {
+    this.clearDrawerSearch();
     this.state.selectedWaiverPos = pos || 'ALL';
     document.querySelectorAll('#drawerPosPills .filter-pill').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.pos === this.state.selectedWaiverPos);
@@ -3104,9 +3112,24 @@ class WeeklyOptimizerController {
 
   onDrawerSearchPlayer(name) {
     const input = document.getElementById('drawerWaiverSearch');
+    const cleanName = (name || '').toLowerCase().trim();
+
+    // Toggle off if clicking the currently active search
+    if (this.state.waiverSearchQuery === cleanName) {
+      this.clearDrawerSearch();
+      this.renderWaiverDrawer();
+      this.showToast(`Cleared player filter 🐾`);
+      return;
+    }
+
     if (input) {
       input.value = name;
-      this.state.waiverSearchQuery = name.toLowerCase().trim();
+      this.state.waiverSearchQuery = cleanName;
+      // Reset position to ALL so the player is immediately visible
+      this.state.selectedWaiverPos = 'ALL';
+      document.querySelectorAll('#drawerPosPills .filter-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.pos === 'ALL');
+      });
       this.renderWaiverDrawer();
       this.showToast(`Filtering drawer for ${name} 🐾`);
     }

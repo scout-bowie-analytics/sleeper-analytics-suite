@@ -320,7 +320,14 @@ class WaiverApp {
     this.applyFiltersAndSort();
   }
 
+  clearSearch() {
+    const searchInput = document.getElementById('waiverSearch');
+    if (searchInput) searchInput.value = '';
+    this.state.searchQuery = '';
+  }
+
   onToggleStrategy(strategy) {
+    this.clearSearch();
     if (this.state.selectedStrategy === strategy) {
       this.state.selectedStrategy = null; // Toggle off
     } else {
@@ -333,6 +340,7 @@ class WaiverApp {
   }
 
   onFilterPosition(pos) {
+    this.clearSearch();
     this.state.selectedPosition = pos || 'ALL';
     document.querySelectorAll('#posPillsGroup .filter-pill').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.pos === this.state.selectedPosition);
@@ -366,9 +374,25 @@ class WaiverApp {
 
   onSearchPlayer(name) {
     const searchInput = document.getElementById('waiverSearch');
+    const cleanName = (name || '').toLowerCase().trim();
+
+    // Toggle off if clicking the currently active search
+    if (this.state.searchQuery === cleanName) {
+      this.clearSearch();
+      this.applyFiltersAndSort();
+      this.showToast(`Cleared player filter 🐾`);
+      return;
+    }
+
     if (searchInput) {
       searchInput.value = name;
-      this.onSearchInput();
+      this.state.searchQuery = cleanName;
+      // Reset position to ALL so the player is immediately visible
+      this.state.selectedPosition = 'ALL';
+      document.querySelectorAll('#posPillsGroup .filter-pill').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.pos === 'ALL');
+      });
+      this.applyFiltersAndSort();
       this.showToast(`Filtering for ${name} 🐾`);
     }
   }
