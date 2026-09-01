@@ -145,10 +145,17 @@ export class WaiverEngine {
             : rawProj;
 
           // Calculate Contingent Handcuff Score (1-100)
-          const contingentScore = (hasNflTeam && inheritance) ? 96 : (hasNflTeam ? this.calculateContingentUpside(player) : 0);
+          const baseContingent = hasNflTeam ? this.calculateContingentUpside(player) : 0;
+          const contingentScore = (hasNflTeam && inheritance) ? 96 : baseContingent;
 
-          // Exclude players not on an NFL team, sidelined zero-scorers, and long-tail noise
-          if (hasNflTeam && !isSidelined && (finalProj >= this.options.minProjectionThreshold || contingentScore >= 65 || pos === 'DEF' || inheritance)) {
+          // Check if player is an Elite IR/PUP Stash on return watch
+          const isIrStash = hasNflTeam && isSidelined && ['IR', 'PUP', 'OUT'].includes(injStatus || status) && 
+            ((player.projected_pts && player.projected_pts >= 7.5) || player.depth_chart_order === 1 || baseContingent >= 60);
+
+          const returnBaseline = isIrStash ? Number((player.projected_pts || player.projected_points || 11.5).toFixed(1)) : 0;
+
+          // Exclude players not on an NFL team, and non-stash inactive noise
+          if (hasNflTeam && (!isSidelined || isIrStash) && (finalProj >= this.options.minProjectionThreshold || contingentScore >= 65 || pos === 'DEF' || inheritance || isIrStash)) {
             freeAgents.push({
               ...player,
               player_id: pid,
@@ -157,6 +164,8 @@ export class WaiverEngine {
               contingent_score: contingentScore,
               inheritance,
               isNextManUp: inheritance !== null,
+              isIrStash: Boolean(isIrStash),
+              return_baseline_pts: returnBaseline,
               is_free_agent: true
             });
           }
@@ -168,28 +177,56 @@ export class WaiverEngine {
   }
 
   /**
-   * Analyze user's current roster to identify starters, bench depth, and cut candidates
+   * Analyze user's current roster to identify starters, bench depth, cut candidates, and IR lock risks
    */
   analyzeUserRoster(userRoster, allPlayersMap = {}, weekProjections = {}) {
     if (!userRoster || !Array.isArray(userRoster.players)) {
       return {
         starters: [],
         bench: [],
+        reserve: [],
         weakestBench: null,
         weakestByPos: {},
         hasOpenIrMove: false,
-        irEligiblePlayer: null
+        irEligiblePlayer: null,
+        hasIrLockWarning: false,
+        lockedPlayer: null
       };
     }
 
     const starterIds = new Set((userRoster.starters || []).map(id => String(id)));
+    const reserveIds = new Set((userRoster.reserve || []).map(id => String(id)));
     const allRosterPids = (userRoster.players || []).map(id => String(id));
 
     const starters = [];
     const bench = [];
+    const reserve = [];
     let irEligiblePlayer = null;
+    let hasIrLockWarning = false;
+    let lockedPlayer = null;
+
+    const validIrStatuses = new Set(['IR', 'PUP', 'OUT', 'SUSPENDED', 'COV', 'DNR']);
+
+    // Check Reserve (IR Slots) for Roster Lock Warnings
+    if (Array.isArray(userRoster.reserve)) {
+      userRoster.reserve.forEach(pid => {
+        const p = allPlayersMap[String(pid)] || { player_id: pid, full_name: `Player ${pid}` };
+        reserve.push(p);
+        const pStatus = (p.status || '').toUpperCase();
+        const pInj = (p.injury_status || '').toUpperCase();
+        if (!validIrStatuses.has(pInj) && !validIrStatuses.has(pStatus)) {
+          hasIrLockWarning = true;
+          lockedPlayer = {
+            ...p,
+            currentStatus: p.injury_status || 'Active'
+          };
+        }
+      });
+    }
 
     allRosterPids.forEach(pid => {
+      if (reserveIds.has(pid)) return; // Already processed in reserve
+
       const player = allPlayersMap[pid] || { player_id: pid, full_name: `Player ${pid}`, position: 'FLEX' };
       const team = (player.team || '').trim();
       const hasNflTeam = team && team !== 'FA' && team !== 'None' && team !== 'FA*';
@@ -242,10 +279,13 @@ export class WaiverEngine {
     return {
       starters,
       bench,
+      reserve,
       weakestBench,
       weakestByPos,
       hasOpenIrMove: irEligiblePlayer !== null,
-      irEligiblePlayer
+      irEligiblePlayer,
+      hasIrLockWarning,
+      lockedPlayer
     };
   }
 
@@ -306,13 +346,16 @@ export class WaiverEngine {
       if (fa.isNextManUp && fa.inheritance) {
         badges.push({ type: 'next_man_up', label: `🚨 Next Man Up: ${fa.inheritance.roleDesc}` });
       }
-      if (streamingScore >= 75) {
+      if (fa.isIrStash) {
+        badges.push({ type: 'ir_stash', label: '⏳ Return Watch: Elite IR Stash' });
+      }
+      if (streamingScore >= 75 && !fa.isIrStash) {
         badges.push({ type: 'streamer', label: '🛡️ High-Floor Streamer' });
       }
-      if (fa.contingent_score >= 80 && !fa.isNextManUp) {
+      if (fa.contingent_score >= 80 && !fa.isNextManUp && !fa.isIrStash) {
         badges.push({ type: 'handcuff', label: '🔥 Contingent Handcuff' });
       }
-      if (netDelta >= 3.5) {
+      if (netDelta >= 3.5 && !fa.isIrStash) {
         badges.push({ type: 'upgrade', label: '⚡ Immediate Upgrade' });
       }
       if (isFreeAdd) {

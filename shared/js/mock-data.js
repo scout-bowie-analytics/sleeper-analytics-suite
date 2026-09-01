@@ -706,6 +706,36 @@ export const MOCK_FREE_AGENTS_DB = {
     status: "Active",
     avatar: "https://sleepercdn.com/content/nfl/players/thumb/8212.jpg"
   },
+  "fa_jonathon_brooks": {
+    player_id: "fa_jonathon_brooks",
+    full_name: "Jonathon Brooks",
+    first_name: "Jonathon",
+    last_name: "Brooks",
+    position: "RB",
+    team: "CAR",
+    depth_chart_order: 1,
+    opponent: "@ NO",
+    projected_pts: 13.5,
+    projected_points: 13.5,
+    injury_status: "PUP",
+    status: "Inactive",
+    avatar: "https://sleepercdn.com/content/nfl/players/thumb/11566.jpg"
+  },
+  "fa_tj_hockenson": {
+    player_id: "fa_tj_hockenson",
+    full_name: "T.J. Hockenson",
+    first_name: "T.J.",
+    last_name: "Hockenson",
+    position: "TE",
+    team: "MIN",
+    depth_chart_order: 1,
+    opponent: "@ NYG",
+    projected_pts: 12.2,
+    projected_points: 12.2,
+    injury_status: "PUP",
+    status: "Inactive",
+    avatar: "https://sleepercdn.com/content/nfl/players/thumb/5844.jpg"
+  },
   "fa_khalil_shakir": {
     player_id: "fa_khalil_shakir",
     full_name: "Khalil Shakir",
