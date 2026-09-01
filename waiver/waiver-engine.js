@@ -145,94 +145,105 @@ export class WaiverEngine {
 
       // Must not be rostered and must be an active NFL asset
       if (!rosteredIds.has(pid)) {
-        const pos = player.position || 'FLEX';
-        if (pos === 'FLEX' || ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(pos)) {
-          const team = (player.team || '').trim();
-          const hasNflTeam = team && team !== 'FA' && team !== 'None' && team !== 'FA*';
-          const status = (player.status || '').toUpperCase();
-          const injStatus = (player.injury_status || '').toUpperCase();
-          const sidelinedStatuses = new Set(['IR', 'PUP', 'OUT', 'SUSPENDED', 'INACTIVE', 'FREE AGENT', 'RETIRED', 'DNR']);
-          const isSidelined = sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus);
+        let pos = (player.position || '').toUpperCase();
+        if (!pos && Array.isArray(player.fantasy_positions) && player.fantasy_positions.length > 0) {
+          pos = String(player.fantasy_positions[0]).toUpperCase();
+        }
 
-          // If player is not on an NFL team or is on IR/PUP/OUT, projection MUST be 0.0 pts
-          let rawProj = 0;
-          if (hasNflTeam && !isSidelined) {
-            if (weekProjections && weekProjections[pid] !== undefined && Number(weekProjections[pid]) > 0) {
-              rawProj = Number(weekProjections[pid]);
-            } else if (player.projected_pts !== undefined && Number(player.projected_pts) > 0) {
-              rawProj = Number(player.projected_pts);
-            } else if (player.projected_points !== undefined && Number(player.projected_points) > 0) {
-              rawProj = Number(player.projected_points);
-            } else {
-              rawProj = this.estimatePlayerProjection(player, scoringSettings);
-            }
+        const validFantasyPositions = new Set(['QB', 'RB', 'WR', 'TE', 'K', 'DEF']);
+        if (!validFantasyPositions.has(pos)) {
+          return; // Skip IDP, offensive linemen, snappers, or null positions
+        }
+
+        const team = (player.team || '').trim();
+        const hasNflTeam = team && team !== 'FA' && team !== 'None' && team !== 'FA*';
+        if (!hasNflTeam) return;
+
+        const status = (player.status || '').toUpperCase();
+        const injStatus = (player.injury_status || '').toUpperCase();
+        const sidelinedStatuses = new Set(['IR', 'PUP', 'OUT', 'SUSPENDED', 'INACTIVE', 'FREE AGENT', 'RETIRED', 'DNR']);
+        const isSidelined = sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus) || player.active === false;
+
+        // If player is not on an NFL team or is on IR/PUP/OUT, projection MUST be 0.0 pts
+        let rawProj = 0;
+        if (hasNflTeam && !isSidelined) {
+          if (weekProjections && weekProjections[pid] !== undefined && Number(weekProjections[pid]) > 0) {
+            rawProj = Number(weekProjections[pid]);
+          } else if (player.projected_pts !== undefined && Number(player.projected_pts) > 0) {
+            rawProj = Number(player.projected_pts);
+          } else if (player.projected_points !== undefined && Number(player.projected_points) > 0) {
+            rawProj = Number(player.projected_points);
+          } else {
+            rawProj = this.estimatePlayerProjection(player, scoringSettings);
           }
+        }
 
-          // Check if this player inherited a starting role
-          const inheritance = (hasNflTeam && !isSidelined) ? (inheritanceMap.get(pid) || null) : null;
-          const finalProj = inheritance 
-            ? Math.max(rawProj, inheritance.inheritedProj)
-            : rawProj;
+        // Check if this player inherited a starting role
+        const inheritance = (hasNflTeam && !isSidelined) ? (inheritanceMap.get(pid) || null) : null;
+        const finalProj = inheritance 
+          ? Math.max(rawProj, inheritance.inheritedProj)
+          : rawProj;
 
-          // Calculate Contingent Handcuff Score (1-100)
-          const baseContingent = hasNflTeam ? this.calculateContingentUpside(player) : 0;
-          const contingentScore = (hasNflTeam && inheritance) ? 96 : baseContingent;
+        // Calculate Contingent Handcuff Score (1-100)
+        const baseContingent = hasNflTeam ? this.calculateContingentUpside(player) : 0;
+        const contingentScore = (hasNflTeam && inheritance) ? 96 : baseContingent;
 
-          // Check if player is an Elite IR/PUP Stash on return watch
-          const isIrStash = hasNflTeam && isSidelined && ['IR', 'PUP', 'OUT'].includes(injStatus || status) && 
-            ((player.projected_pts && player.projected_pts >= 7.5) || player.depth_chart_order === 1 || baseContingent >= 60);
+        // Check if player is an Elite IR/PUP Stash on return watch
+        const isIrStash = hasNflTeam && isSidelined && ['IR', 'PUP', 'OUT'].includes(injStatus || status) && 
+          ((player.projected_pts && player.projected_pts >= 7.5) || player.depth_chart_order === 1 || baseContingent >= 60);
 
-          const returnBaseline = isIrStash ? Number((player.projected_pts || player.projected_points || 11.5).toFixed(1)) : 0;
+        const returnBaseline = isIrStash ? Number((player.projected_pts || player.projected_points || 11.5).toFixed(1)) : 0;
 
-          // Real-Time Stock Ticker Adds / Drops
-          const addCount = Number(trendingAddsMap[pid] ?? player.trending_adds ?? 0);
-          const dropCount = Number(trendingDropsMap[pid] ?? player.trending_drops ?? 0);
-          let trend = null;
-          if (addCount >= 1000) {
-            trend = {
-              type: 'UP',
-              count: addCount,
-              formatted: `▲ +${this.formatTrendingCount(addCount)}`
-            };
-          } else if (dropCount >= 1000) {
-            trend = {
-              type: 'DOWN',
-              count: dropCount,
-              formatted: `▼ -${this.formatTrendingCount(dropCount)}`
-            };
-          }
+        // Real-Time Stock Ticker Adds / Drops
+        const addCount = Number(trendingAddsMap[pid] ?? player.trending_adds ?? 0);
+        const dropCount = Number(trendingDropsMap[pid] ?? player.trending_drops ?? 0);
+        let trend = null;
+        if (addCount >= 1000) {
+          trend = {
+            type: 'UP',
+            count: addCount,
+            formatted: `▲ +${this.formatTrendingCount(addCount)}`
+          };
+        } else if (dropCount >= 1000) {
+          trend = {
+            type: 'DOWN',
+            count: dropCount,
+            formatted: `▼ -${this.formatTrendingCount(dropCount)}`
+          };
+        }
 
-          const fullName = player.full_name || 
-            (player.first_name && player.last_name ? `${player.first_name} ${player.last_name}`.trim() : null) || 
-            player.name || 
-            (pos === 'DEF' ? `${player.first_name || player.team || pid} ${player.last_name || 'Defense'}`.trim() : `Player ${pid}`);
+        const fullName = player.full_name || 
+          (player.first_name && player.last_name ? `${player.first_name} ${player.last_name}`.trim() : null) || 
+          player.name || 
+          (pos === 'DEF' ? `${player.first_name || player.team || pid} ${player.last_name || 'Defense'}`.trim() : `Player ${pid}`);
 
-          const avatar = player.avatar || 
-            (pos === 'DEF' 
-              ? `https://sleepercdn.com/images/team_logos/nfl/${(player.team || pid).toLowerCase()}.png` 
-              : `https://sleepercdn.com/content/nfl/players/thumb/${pid}.jpg`);
+        const avatar = player.avatar || 
+          (pos === 'DEF' 
+            ? `https://sleepercdn.com/images/team_logos/nfl/${(player.team || pid).toLowerCase()}.png` 
+            : `https://sleepercdn.com/content/nfl/players/thumb/${pid}.jpg`);
 
-          // Exclude players not on an NFL team, and non-stash inactive noise
-          if (hasNflTeam && (!isSidelined || isIrStash) && (finalProj >= this.options.minProjectionThreshold || contingentScore >= 65 || pos === 'DEF' || inheritance || isIrStash || addCount >= 10000)) {
-            freeAgents.push({
-              ...player,
-              player_id: pid,
-              full_name: fullName,
-              name: fullName,
-              avatar,
-              raw_projected_pts: Number(rawProj.toFixed(1)),
-              projected_pts: Number(finalProj.toFixed(1)),
-              contingent_score: contingentScore,
-              inheritance,
-              isNextManUp: inheritance !== null,
-              isIrStash: Boolean(isIrStash),
-              return_baseline_pts: returnBaseline,
-              trending_adds: addCount,
-              trending_drops: dropCount,
-              trend,
-              is_free_agent: true
-            });
-          }
+        // Exclude players not on an NFL team, and non-stash inactive noise
+        if (hasNflTeam && (!isSidelined || isIrStash) && (finalProj >= this.options.minProjectionThreshold || contingentScore >= 65 || pos === 'DEF' || inheritance || isIrStash || addCount >= 10000)) {
+          freeAgents.push({
+            ...player,
+            player_id: pid,
+            position: pos,
+            fantasy_positions: [pos],
+            full_name: fullName,
+            name: fullName,
+            avatar,
+            raw_projected_pts: Number(rawProj.toFixed(1)),
+            projected_pts: Number(finalProj.toFixed(1)),
+            contingent_score: contingentScore,
+            inheritance,
+            isNextManUp: inheritance !== null,
+            isIrStash: Boolean(isIrStash),
+            return_baseline_pts: returnBaseline,
+            trending_adds: addCount,
+            trending_drops: dropCount,
+            trend,
+            is_free_agent: true
+          });
         }
       }
     });
@@ -592,9 +603,15 @@ export class WaiverEngine {
     const status = (player.status || '').toUpperCase();
     const injStatus = (player.injury_status || '').toUpperCase();
     const sidelinedStatuses = new Set(['IR', 'PUP', 'OUT', 'SUSPENDED', 'INACTIVE', 'FREE AGENT', 'RETIRED', 'DNR']);
-    if (sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus)) return 0.0;
+    if (sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus) || player.active === false) return 0.0;
 
-    const pos = player.position || (player.fantasy_positions && player.fantasy_positions[0]) || 'FLEX';
+    let pos = (player.position || '').toUpperCase();
+    if (!pos && Array.isArray(player.fantasy_positions) && player.fantasy_positions.length > 0) {
+      pos = String(player.fantasy_positions[0]).toUpperCase();
+    }
+    const validFantasyPositions = new Set(['QB', 'RB', 'WR', 'TE', 'K', 'DEF']);
+    if (!validFantasyPositions.has(pos)) return 0.0;
+
     const hasExplicitOrder = player.depth_chart_order !== null && player.depth_chart_order !== undefined && !isNaN(Number(player.depth_chart_order));
     const order = hasExplicitOrder ? Number(player.depth_chart_order) : 4;
     const ppr = scoringSettings?.rec !== undefined ? scoringSettings.rec : 1.0;
