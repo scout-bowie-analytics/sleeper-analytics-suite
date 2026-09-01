@@ -147,9 +147,19 @@ export class WaiverEngine {
           // If player is not on an NFL team or is on IR/PUP/OUT, projection MUST be 0.0 pts
           let rawProj = 0;
           if (hasNflTeam && !isSidelined) {
-            rawProj = weekProjections[pid] !== undefined 
-              ? Number(weekProjections[pid]) 
-              : (Number(player.projected_pts) || 0);
+            if (weekProjections[pid] !== undefined && Number(weekProjections[pid]) > 0) {
+              rawProj = Number(weekProjections[pid]);
+            } else if (player.projected_pts !== undefined && Number(player.projected_pts) > 0) {
+              rawProj = Number(player.projected_pts);
+            } else if (player.projected_points !== undefined && Number(player.projected_points) > 0) {
+              rawProj = Number(player.projected_points);
+            } else if (pos === 'DEF') {
+              rawProj = 7.0 + (['SF', 'BAL', 'NYJ', 'CLE', 'DAL', 'KC', 'BUF', 'PHI'].includes(player.team || pid) ? 1.5 : 0);
+            } else if (pos === 'K') {
+              rawProj = 7.2;
+            } else {
+              rawProj = 0;
+            }
           }
 
           // Check if this player inherited a starting role
@@ -186,11 +196,24 @@ export class WaiverEngine {
             };
           }
 
+          const fullName = player.full_name || 
+            (player.first_name && player.last_name ? `${player.first_name} ${player.last_name}`.trim() : null) || 
+            player.name || 
+            (pos === 'DEF' ? `${player.first_name || player.team || pid} ${player.last_name || 'Defense'}`.trim() : `Player ${pid}`);
+
+          const avatar = player.avatar || 
+            (pos === 'DEF' 
+              ? `https://sleepercdn.com/images/team_logos/nfl/${(player.team || pid).toLowerCase()}.png` 
+              : `https://sleepercdn.com/content/nfl/players/thumb/${pid}.jpg`);
+
           // Exclude players not on an NFL team, and non-stash inactive noise
           if (hasNflTeam && (!isSidelined || isIrStash) && (finalProj >= this.options.minProjectionThreshold || contingentScore >= 65 || pos === 'DEF' || inheritance || isIrStash || addCount >= 10000)) {
             freeAgents.push({
               ...player,
               player_id: pid,
+              full_name: fullName,
+              name: fullName,
+              avatar,
               raw_projected_pts: Number(rawProj.toFixed(1)),
               projected_pts: Number(finalProj.toFixed(1)),
               contingent_score: contingentScore,
@@ -287,9 +310,16 @@ export class WaiverEngine {
         };
       }
 
+      const fullName = player.full_name || 
+        (player.first_name && player.last_name ? `${player.first_name} ${player.last_name}`.trim() : null) || 
+        player.name || 
+        (player.position === 'DEF' ? `${player.first_name || player.team || pid} ${player.last_name || 'Defense'}`.trim() : `Player ${pid}`);
+
       const decorated = {
         ...player,
         player_id: pid,
+        full_name: fullName,
+        name: fullName,
         projected_pts: Number(proj.toFixed(1)),
         isStarter: starterIds.has(pid),
         isBench: !starterIds.has(pid),

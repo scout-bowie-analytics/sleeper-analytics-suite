@@ -3197,14 +3197,19 @@ class WeeklyOptimizerController {
       const targetedBid = player.faabBids?.targeted?.dollars ?? 1;
       const targetedPct = player.faabBids?.targeted?.percent ?? 1;
 
+      const avatarUrl = player.avatar || (player.position === 'DEF' 
+        ? `https://sleepercdn.com/images/team_logos/nfl/${(player.team || player.player_id || '').toLowerCase()}.png`
+        : `https://sleepercdn.com/images/v2/icons/player_default.webp`);
+      const resolvedName = player.full_name || player.name || (player.position === 'DEF' ? `${player.team || player.player_id} Defense` : `Player ${player.player_id}`);
+
       return `
         <div class="drawer-waiver-card ${player.isGoldenBone ? 'golden-bone-card' : ''}">
           <div class="drawer-card-top-row">
             <div class="drawer-card-player-info">
-              <img src="${player.avatar || 'https://sleepercdn.com/images/v2/icons/player_default.webp'}" class="waiver-player-avatar" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null; this.src='https://sleepercdn.com/images/v2/icons/player_default.webp';" alt="${player.full_name}">
+              <img src="${avatarUrl}" class="waiver-player-avatar" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;" onerror="this.onerror=null; this.src='https://sleepercdn.com/images/v2/icons/player_default.webp';" alt="${resolvedName}">
               <div style="min-width:0;flex:1;">
                 <div class="drawer-player-name-row">
-                  <span class="drawer-player-name">${player.full_name || player.name}</span>
+                  <span class="drawer-player-name">${resolvedName}</span>
                   ${tickerHtml}
                 </div>
                 <div class="drawer-player-meta">

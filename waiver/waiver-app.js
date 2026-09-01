@@ -462,9 +462,9 @@ class WaiverApp {
 
     container.innerHTML = targets.slice(0, 40).map(item => {
       const posClass = `pos-${item.position || 'FLEX'}`;
-      const avatarUrl = item.player_id && item.position !== 'DEF'
-        ? `https://sleepercdn.com/content/nfl/players/thumb/${item.player_id}.jpg`
-        : `https://sleepercdn.com/images/v2/icons/player_default.webp`;
+      const avatarUrl = item.avatar || (item.position === 'DEF'
+        ? `https://sleepercdn.com/images/team_logos/nfl/${(item.team || item.player_id || '').toLowerCase()}.png`
+        : `https://sleepercdn.com/content/nfl/players/thumb/${item.player_id}.jpg`);
 
       const badgesHtml = item.badges.map(b => {
         let badgeClass = 'badge-upgrade';
