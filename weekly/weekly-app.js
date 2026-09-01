@@ -2999,6 +2999,17 @@ class WeeklyOptimizerController {
         scoringSettings
       );
 
+      // Automatically calculate remaining FAAB budget from Sleeper league settings & user roster
+      const totalBudget = Number(this.state.league?.settings?.waiver_budget ?? 100);
+      const budgetUsed = Number(this.state.userRoster?.settings?.waiver_budget_used ?? 0);
+      const remainingFaab = Math.max(0, totalBudget - budgetUsed);
+
+      if (!this.state.hasManualFaabOverride) {
+        this.state.waiverFaab = remainingFaab;
+        const faabInput = document.getElementById('drawerFaabInput');
+        if (faabInput) faabInput.value = remainingFaab;
+      }
+
       // Process Net Deltas, FAAB Bids, and Streaming Matrix
       this.state.waiverTargets = this.waiverEngine.processWaiverWire(
         freeAgents,
@@ -3146,8 +3157,9 @@ class WeeklyOptimizerController {
   onDrawerFaabChanged() {
     const input = document.getElementById('drawerFaabInput');
     if (input) {
-      const val = Math.max(0, Number(input.value) || 100);
+      const val = Math.max(0, Number(input.value) || 0);
       this.state.waiverFaab = val;
+      this.state.hasManualFaabOverride = true;
       if (this.state.waiverTargets) {
         this.state.waiverTargets.forEach(p => {
           p.faabBids = this.waiverEngine.calculateFaabBids(p, p.netDelta, this.state.waiverFaab);

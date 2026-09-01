@@ -267,6 +267,17 @@ class WaiverApp {
       trendingDropsMap
     );
 
+    // Automatically calculate remaining FAAB budget from Sleeper league settings & user roster
+    const totalBudget = Number(this.state.currentLeague?.settings?.waiver_budget ?? 100);
+    const budgetUsed = Number(this.state.userRoster?.settings?.waiver_budget_used ?? 0);
+    const remainingFaab = Math.max(0, totalBudget - budgetUsed);
+
+    if (!this.state.hasManualFaabOverride) {
+      this.state.userFaab = remainingFaab;
+      const faabInput = document.getElementById('userFaabInput');
+      if (faabInput) faabInput.value = remainingFaab;
+    }
+
     // 5. Process Net Deltas, FAAB Bids, and Streaming Matrix
     this.state.processedTargets = this.engine.processWaiverWire(
       freeAgents,
