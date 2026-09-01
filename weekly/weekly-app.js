@@ -2374,6 +2374,9 @@ class WeeklyOptimizerController {
       const rangeBarHtml = renderProjectionRangeBar(dist);
       const avatarUrl = player.avatar || 'https://sleepercdn.com/images/v2/icons/player_default.webp';
 
+      const isPreviewingThisSlot = !isOpponent && this.state.activeSwapPreview && this.state.activeSwapPreview.slotIdx === slotIdx;
+      const previewCandidateId = isPreviewingThisSlot ? this.state.activeSwapPreview.candidateId : null;
+
       let actionCellHtml = '';
       if (isOpponent) {
         actionCellHtml = `
@@ -2388,7 +2391,7 @@ class WeeklyOptimizerController {
         );
 
         let dropdownOptions = `
-          <option value="${player.player_id}" selected>
+          <option value="${player.player_id}" ${!isPreviewingThisSlot ? 'selected' : ''}>
             ✓ Active: ${cleanName} (${player.position} | ${dist.mean} pts)
           </option>
         `;
@@ -2397,7 +2400,8 @@ class WeeklyOptimizerController {
           dropdownOptions += eligibleBench.map(b => {
             const bDist = calculatePlayerDistributions(b);
             const bCleanName = getCleanPlayerName(b.full_name);
-            return `<option value="${b.player_id}">➔ Swap: ${bCleanName} (${b.position} - ${b.team} | ${bDist.mean} pts)</option>`;
+            const isSelected = isPreviewingThisSlot && previewCandidateId === b.player_id;
+            return `<option value="${b.player_id}" ${isSelected ? 'selected' : ''}>➔ Swap: ${bCleanName} (${b.position} - ${b.team} | ${bDist.mean} pts)</option>`;
           }).join('');
         } else {
           dropdownOptions += `<option disabled>(No eligible bench players)</option>`;
@@ -2405,15 +2409,100 @@ class WeeklyOptimizerController {
 
         actionCellHtml = `
           <td class="col-swap col-action" onclick="event.stopPropagation();">
-            <select class="select-input starter-swap-select" style="padding:5px 8px;font-size:11.5px;width:100%;cursor:pointer;" onchange="window.onStarterDropdownChange(${slotIdx}, this.value)">
+            <select class="select-input starter-swap-select" style="padding:5px 8px;font-size:11.5px;width:100%;cursor:pointer;border-color:${isPreviewingThisSlot ? 'var(--accent)' : 'var(--border)'};" onchange="window.onStarterDropdownChange(${slotIdx}, this.value)">
               ${dropdownOptions}
             </select>
           </td>
         `;
       }
 
+      let previewRowHtml = '';
+      if (isPreviewingThisSlot && this.state.activeSwapPreview.candidate) {
+        const candidate = this.state.activeSwapPreview.candidate;
+        const candDist = calculatePlayerDistributions(candidate);
+        const candCleanName = getCleanPlayerName(candidate.full_name);
+        const candAvatar = candidate.avatar || 'https://sleepercdn.com/images/v2/icons/player_default.webp';
+
+        const projDelta = Number((candDist.mean - dist.mean).toFixed(1));
+        const floorDelta = Number((candDist.floor10 - dist.floor10).toFixed(1));
+        const ceilDelta = Number((candDist.ceiling90 - dist.ceiling90).toFixed(1));
+
+        const projDeltaClass = projDelta > 0.5 ? 'pos' : projDelta < -0.5 ? 'neg' : 'neu';
+        const floorDeltaClass = floorDelta > 0.5 ? 'pos' : floorDelta < -0.5 ? 'neg' : 'neu';
+        const ceilDeltaClass = ceilDelta > 0.5 ? 'pos' : ceilDelta < -0.5 ? 'neg' : 'neu';
+
+        const projDeltaPrefix = projDelta > 0 ? '+' : '';
+        const floorDeltaPrefix = floorDelta > 0 ? '+' : '';
+        const ceilDeltaPrefix = ceilDelta > 0 ? '+' : '';
+
+        previewRowHtml = `
+          <tr class="swap-preview-row">
+            <td colspan="6" style="padding:0;border:none;">
+              <div class="swap-preview-card">
+                <div class="swap-preview-header">
+                  <span class="swap-preview-badge">⚡ Lineup Swap Comparison</span>
+                  <span class="swap-preview-slot">${displaySlot} SLOT</span>
+                </div>
+                
+                <div class="swap-preview-grid">
+                  <!-- Current Starter -->
+                  <div class="swap-compare-player current">
+                    <div class="swap-tag">Current Starter</div>
+                    <div class="swap-p-info">
+                      <img src="${avatarUrl}" class="swap-p-avatar" alt="${cleanName}" onerror="this.src='https://sleepercdn.com/images/v2/icons/player_default.webp'">
+                      <div>
+                        <div class="swap-p-name">${cleanName} <span class="swap-p-team">${player.team || 'FA'}</span></div>
+                        <div style="font-size:10.5px;color:var(--muted);">${player.position} &bull; ${player.opponent || 'OPP'}</div>
+                      </div>
+                    </div>
+                    <div class="swap-p-metrics">
+                      <div class="metric"><span class="m-lbl">Floor:</span> <span class="m-val">${dist.floor10.toFixed(1)}</span></div>
+                      <div class="metric"><span class="m-lbl">Exp:</span> <span class="m-val highlight">${dist.mean.toFixed(1)} pts</span></div>
+                      <div class="metric"><span class="m-lbl">Ceil:</span> <span class="m-val">${dist.ceiling90.toFixed(1)}</span></div>
+                    </div>
+                  </div>
+
+                  <!-- Swap Arrow / Delta -->
+                  <div class="swap-compare-delta">
+                    <div class="delta-arrow">➔</div>
+                    <div class="delta-pills">
+                      <div class="delta-pill ${projDeltaClass}">${projDeltaPrefix}${projDelta} pts Exp</div>
+                      <div class="delta-pill ${floorDeltaClass}">${floorDeltaPrefix}${floorDelta} pts Floor</div>
+                      <div class="delta-pill ${ceilDeltaClass}">${ceilDeltaPrefix}${ceilDelta} pts Ceil</div>
+                    </div>
+                  </div>
+
+                  <!-- Candidate Player -->
+                  <div class="swap-compare-player candidate">
+                    <div class="swap-tag new">Proposed Swap</div>
+                    <div class="swap-p-info">
+                      <img src="${candAvatar}" class="swap-p-avatar" alt="${candCleanName}" onerror="this.src='https://sleepercdn.com/images/v2/icons/player_default.webp'">
+                      <div>
+                        <div class="swap-p-name">${candCleanName} <span class="swap-p-team">${candidate.team || 'FA'}</span></div>
+                        <div style="font-size:10.5px;color:var(--muted);">${candidate.position} &bull; ${candidate.opponent || 'OPP'}</div>
+                      </div>
+                    </div>
+                    <div class="swap-p-metrics">
+                      <div class="metric"><span class="m-lbl">Floor:</span> <span class="m-val">${candDist.floor10.toFixed(1)}</span></div>
+                      <div class="metric"><span class="m-lbl">Exp:</span> <span class="m-val highlight" style="color:var(--accent);">${candDist.mean.toFixed(1)} pts</span></div>
+                      <div class="metric"><span class="m-lbl">Ceil:</span> <span class="m-val">${candDist.ceiling90.toFixed(1)}</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="swap-preview-actions">
+                  <button class="btn-cancel-swap" onclick="window.onCancelSwapPreview(${slotIdx})">✕ Cancel</button>
+                  <button class="btn-confirm-swap" onclick="window.onConfirmSwap(${slotIdx}, '${candidate.player_id}')">✔️ Confirm Swap</button>
+                </div>
+              </div>
+            </td>
+          </tr>
+        `;
+      }
+
       return `
-        <tr class="suggest-row player-row" onclick="openPlayerDrawer('${player.player_id}')">
+        <tr class="suggest-row player-row ${isPreviewingThisSlot ? 'active-preview-row' : ''}" onclick="openPlayerDrawer('${player.player_id}')">
           <td class="col-slot"><span class="pos-tag ${posClass}">${displaySlot}</span></td>
           <td class="col-player">
             <div style="display:flex;align-items:center;gap:8px;width:100%;">
@@ -2429,30 +2518,64 @@ class WeeklyOptimizerController {
           <td class="col-scout-alert col-alert">${alertBadge}</td>
           ${actionCellHtml}
         </tr>
+        ${previewRowHtml}
       `;
     }).join('');
   }
 
   /**
-   * Two-Way Dropdown Swap Handler
+   * Two-Way Dropdown Swap Handler (Two-Stage Preview & Confirm)
    */
   onStarterDropdownChange(slotIdx, newPlayerId) {
     if (!newPlayerId) return;
 
     const currentStarter = this.state.userStarters[slotIdx];
-    if (!currentStarter || currentStarter.player_id === newPlayerId) return;
+    if (!currentStarter) return;
 
-    const newBenchPlayer = this.state.userBench.find(p => p.player_id === newPlayerId);
+    if (currentStarter.player_id === newPlayerId) {
+      // User selected active starter again -> cancel preview
+      this.state.activeSwapPreview = null;
+      this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.dossier, false);
+      return;
+    }
+
+    const newBenchPlayer = (this.state.userBench || []).find(p => p.player_id === newPlayerId);
     if (!newBenchPlayer) return;
 
-    const slotType = currentStarter.slotAssigned;
+    const slotType = (this.state.starterSlots && this.state.starterSlots[slotIdx]) || currentStarter.slotAssigned || currentStarter.position || 'FLEX';
 
     // Strict Positional Verification
     if (!isPlayerEligibleForSlot(newBenchPlayer.position, slotType)) {
       alert(`${newBenchPlayer.full_name} (${newBenchPlayer.position}) is not eligible for the ${slotType} slot.`);
-      this.recomputeOptimization();
+      this.state.activeSwapPreview = null;
+      this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.dossier, false);
       return;
     }
+
+    // Activate visual comparison preview without mutating lineup yet
+    this.state.activeSwapPreview = {
+      slotIdx,
+      currentStarter,
+      candidate: newBenchPlayer,
+      candidateId: newPlayerId
+    };
+
+    this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.dossier, false);
+  }
+
+  /**
+   * Confirm and Commit the Lineup Swap
+   */
+  onConfirmSwap(slotIdx, newPlayerId) {
+    if (!newPlayerId) return;
+
+    const currentStarter = this.state.userStarters[slotIdx];
+    if (!currentStarter) return;
+
+    const newBenchPlayer = (this.state.userBench || []).find(p => p.player_id === newPlayerId);
+    if (!newBenchPlayer) return;
+
+    const slotType = (this.state.starterSlots && this.state.starterSlots[slotIdx]) || currentStarter.slotAssigned || currentStarter.position || 'FLEX';
 
     // Perform two-way swap
     newBenchPlayer.slotAssigned = slotType;
@@ -2465,8 +2588,19 @@ class WeeklyOptimizerController {
     this.state.userBench = this.state.userBench.filter(p => p.player_id !== newPlayerId);
     this.state.userBench.push(currentStarter);
 
+    // Clear active preview
+    this.state.activeSwapPreview = null;
+
     this.showToast(`Swapped in ${newBenchPlayer.full_name} for ${currentStarter.full_name} at ${slotType}! 🐾`);
     this.recomputeOptimization();
+  }
+
+  /**
+   * Cancel Active Swap Preview
+   */
+  onCancelSwapPreview(slotIdx) {
+    this.state.activeSwapPreview = null;
+    this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.dossier, false);
   }
 
   /**
