@@ -20,6 +20,7 @@ import {
 } from './simulation-engine.js';
 import { scoutBowie } from './scout-bowie.js';
 import { fetchLiveVegasOdds, getTeamVegasContext, setOddsApiKey, CONFIG as ODDS_CONFIG } from '../shared/js/vegas-odds.js';
+import { WaiverEngine } from '../waiver/waiver-engine.js';
 
 /**
  * Strict Positional Eligibility Helper
@@ -221,9 +222,17 @@ class WeeklyOptimizerController {
       liveOdds: null,
       isLoading: false,
       alertSettings: this.loadAlertSettings(),
-      activeAlerts: []
+      activeAlerts: [],
+      waiverFaab: 100,
+      waiverTargets: [],
+      selectedWaiverStrategy: null,
+      selectedWaiverPos: 'ALL',
+      waiverSearchQuery: '',
+      waiverCurrentSort: 'delta_desc',
+      isWaiverDrawerOpen: false
     };
 
+    this.waiverEngine = new WaiverEngine();
     this.chartInstance = null;
     this.bowieQuotes = [
       "\"10,000 iterations computed! Keep an eye on our Golden Bone Lock of the Week and watch out for Bowie Bark Warnings.\" 🐾",
@@ -341,6 +350,15 @@ class WeeklyOptimizerController {
     window.onEmailInputChanged = () => this.onEmailInputChanged();
     window.importRawMatchupJson = () => this.importRawMatchupJson();
     window.importMatchupPayload = (payload) => this.importMatchupPayload(payload);
+    window.openWaiverDrawer = () => this.openWaiverDrawer();
+    window.closeWaiverDrawer = () => this.closeWaiverDrawer();
+    window.onDrawerStrategyToggle = (strat) => this.onDrawerStrategyToggle(strat);
+    window.onDrawerPosFilter = (pos) => this.onDrawerPosFilter(pos);
+    window.onDrawerSearchInput = () => this.onDrawerSearchInput();
+    window.onDrawerSearchPlayer = (name) => this.onDrawerSearchPlayer(name);
+    window.onDrawerSortChanged = () => this.onDrawerSortChanged();
+    window.onDrawerFaabChanged = () => this.onDrawerFaabChanged();
+    window.copyDrawerClaims = () => this.copyDrawerClaims();
   }
 
   renderLoadingTables() {
@@ -775,6 +793,7 @@ class WeeklyOptimizerController {
 
     this.closeSetupModal();
     this.recomputeOptimization();
+    this.loadWaiverTargets();
     
     const platformName = payload.platform ? payload.platform.toUpperCase() : 'ESPN/Yahoo';
     this.showToast(`🏆 Synced ${platformName} matchup successfully via Scout Bowie! 🐾`);
@@ -1785,6 +1804,7 @@ class WeeklyOptimizerController {
       }
 
       this.recomputeOptimization();
+      this.loadWaiverTargets();
     } catch (err) {
       console.error('Error loading matchup data:', err);
     }
@@ -2891,6 +2911,330 @@ class WeeklyOptimizerController {
     if (tip) {
       const quote = this.bowieQuotes[Math.floor(Math.random() * this.bowieQuotes.length)];
       tip.textContent = quote;
+    }
+  }
+
+  /* ==========================================================================
+     WAIVER WIRE RADAR DRAWER ENGINE & ACTIONS
+     ========================================================================== */
+
+  async loadWaiverTargets() {
+    try {
+      if (!this.waiverEngine) {
+        this.waiverEngine = new WaiverEngine();
+      }
+
+      // Check if we have master players pool
+      let allPlayersMap = this.masterPlayersPool || {};
+      if (Object.keys(allPlayersMap).length === 0) {
+        allPlayersMap = await sleeperApi.fetchAllPlayers().catch(() => ({}));
+      }
+
+      // If still empty, merge mock databases
+      if (Object.keys(allPlayersMap).length === 0) {
+        allPlayersMap = { ...MOCK_PLAYERS_DB };
+      }
+
+      // Live 24h Trending Adds & Drops
+      const [trendingAdds, trendingDrops] = await Promise.all([
+        sleeperApi.getTrendingPlayers('add', 24, 100).catch(() => []),
+        sleeperApi.getTrendingPlayers('drop', 24, 100).catch(() => [])
+      ]);
+
+      const trendingAddsMap = {};
+      (trendingAdds || []).forEach(item => {
+        if (item && item.player_id) trendingAddsMap[item.player_id] = item.count;
+      });
+
+      const trendingDropsMap = {};
+      (trendingDrops || []).forEach(item => {
+        if (item && item.player_id) trendingDropsMap[item.player_id] = item.count;
+      });
+
+      // Extract User Analysis from weekly roster
+      const userRosterObj = this.state.userRoster || {
+        starters: (this.state.userStarters || []).map(p => p.player_id),
+        players: (this.state.userPlayers || []).map(p => p.player_id),
+        reserve: (this.state.userReserve || []).map(p => p.player_id)
+      };
+
+      const userAnalysis = this.waiverEngine.analyzeUserRoster(
+        userRosterObj,
+        allPlayersMap,
+        {},
+        trendingDropsMap
+      );
+      this.state.userAnalysis = userAnalysis;
+
+      // Extract Free Agent Pool
+      const freeAgents = this.waiverEngine.extractFreeAgents(
+        allPlayersMap,
+        this.state.leagueRosters || [userRosterObj],
+        {},
+        trendingAddsMap,
+        trendingDropsMap
+      );
+
+      // Process Net Deltas, FAAB Bids, and Streaming Matrix
+      this.state.waiverTargets = this.waiverEngine.processWaiverWire(
+        freeAgents,
+        userAnalysis,
+        { userFaab: this.state.waiverFaab }
+      );
+
+      // Count positive net upgrades
+      const upgrades = this.state.waiverTargets.filter(p => p.netDelta > 0 && !p.isIrStash);
+      const upgradeCount = upgrades.length;
+
+      // Update badges in header and floating trigger
+      const headerBadge = document.getElementById('waiverUpgradeBadge');
+      const floatBadge = document.getElementById('floatingUpgradeBadge');
+      if (headerBadge) {
+        headerBadge.textContent = `+${upgradeCount}`;
+        headerBadge.style.display = upgradeCount > 0 ? 'inline-block' : 'none';
+      }
+      if (floatBadge) {
+        floatBadge.textContent = `+${upgradeCount}`;
+        floatBadge.style.display = upgradeCount > 0 ? 'inline-block' : 'none';
+      }
+
+      const summaryEl = document.getElementById('waiverDrawerSummary');
+      if (summaryEl) {
+        summaryEl.textContent = `Found ${upgradeCount} net upgrades against your bench.`;
+      }
+
+      // Render top trending market velocity in drawer
+      const topTrending = this.state.waiverTargets
+        .filter(p => p.trending_adds && p.trending_adds >= 5000)
+        .sort((a, b) => (b.trending_adds || 0) - (a.trending_adds || 0))
+        .slice(0, 6);
+
+      const velBanner = document.getElementById('drawerMarketVelocityBanner');
+      const velChips = document.getElementById('drawerMarketVelocityChips');
+      if (velBanner && velChips) {
+        if (topTrending.length > 0) {
+          velChips.innerHTML = topTrending.map(p => `
+            <button class="market-velocity-chip" onclick="weeklyOptimizer.onDrawerSearchPlayer('${(p.full_name || p.name || '').replace(/'/g, "\\'")}')" title="Filter to ${p.full_name}" style="font-size:10.5px;padding:1.5px 7px;">
+              <span>${p.full_name || p.name}</span>
+              <span class="chip-adds" style="font-size:10px;">▲ +${this.waiverEngine.formatTrendingCount(p.trending_adds)}</span>
+            </button>
+          `).join('');
+          velBanner.style.display = 'flex';
+        } else {
+          velBanner.style.display = 'none';
+        }
+      }
+
+      this.renderWaiverDrawer();
+    } catch (err) {
+      console.warn('loadWaiverTargets error:', err);
+    }
+  }
+
+  openWaiverDrawer() {
+    this.state.isWaiverDrawerOpen = true;
+    document.getElementById('waiverDrawerOverlay')?.classList.add('active');
+    document.getElementById('waiverRadarDrawer')?.classList.add('active');
+    if (!this.state.waiverTargets || this.state.waiverTargets.length === 0) {
+      this.loadWaiverTargets();
+    } else {
+      this.renderWaiverDrawer();
+    }
+  }
+
+  closeWaiverDrawer() {
+    this.state.isWaiverDrawerOpen = false;
+    document.getElementById('waiverDrawerOverlay')?.classList.remove('active');
+    document.getElementById('waiverRadarDrawer')?.classList.remove('active');
+  }
+
+  onDrawerStrategyToggle(strategy) {
+    if (this.state.selectedWaiverStrategy === strategy) {
+      this.state.selectedWaiverStrategy = null;
+    } else {
+      this.state.selectedWaiverStrategy = strategy;
+    }
+    document.querySelectorAll('#drawerStrategyPills .filter-pill').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.strategy === this.state.selectedWaiverStrategy);
+    });
+    this.renderWaiverDrawer();
+  }
+
+  onDrawerPosFilter(pos) {
+    this.state.selectedWaiverPos = pos || 'ALL';
+    document.querySelectorAll('#drawerPosPills .filter-pill').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.pos === this.state.selectedWaiverPos);
+    });
+    this.renderWaiverDrawer();
+  }
+
+  onDrawerSearchInput() {
+    const input = document.getElementById('drawerWaiverSearch');
+    if (input) {
+      this.state.waiverSearchQuery = input.value.toLowerCase().trim();
+      this.renderWaiverDrawer();
+    }
+  }
+
+  onDrawerSearchPlayer(name) {
+    const input = document.getElementById('drawerWaiverSearch');
+    if (input) {
+      input.value = name;
+      this.state.waiverSearchQuery = name.toLowerCase().trim();
+      this.renderWaiverDrawer();
+      this.showToast(`Filtering drawer for ${name} 🐾`);
+    }
+  }
+
+  onDrawerSortChanged() {
+    const select = document.getElementById('drawerWaiverSort');
+    if (select) {
+      this.state.waiverCurrentSort = select.value;
+      this.renderWaiverDrawer();
+    }
+  }
+
+  onDrawerFaabChanged() {
+    const input = document.getElementById('drawerFaabInput');
+    if (input) {
+      const val = Math.max(0, Number(input.value) || 100);
+      this.state.waiverFaab = val;
+      if (this.state.waiverTargets) {
+        this.state.waiverTargets.forEach(p => {
+          p.faabBids = this.waiverEngine.calculateFaabBids(p, p.netDelta, this.state.waiverFaab);
+        });
+      }
+      this.renderWaiverDrawer();
+      this.showToast(`Updated FAAB budget to $${val}`);
+    }
+  }
+
+  renderWaiverDrawer() {
+    const container = document.getElementById('drawerWaiverCardsList');
+    if (!container) return;
+
+    let list = [...(this.state.waiverTargets || [])];
+
+    // Dimension A: Strategy
+    const strat = this.state.selectedWaiverStrategy;
+    if (strat === 'upgrade') {
+      list = list.filter(p => p.netDelta > 0 && !p.isIrStash);
+    } else if (strat === 'trending') {
+      list = list.filter(p => (p.trending_adds && p.trending_adds >= 5000) || p.trend?.type === 'UP');
+    } else if (strat === 'streamer') {
+      list = list.filter(p => p.streamingScore >= 75 && !p.isIrStash);
+    } else if (strat === 'handcuff') {
+      list = list.filter(p => p.contingent_score >= 75 && !p.isIrStash);
+    } else if (strat === 'ir_stash') {
+      list = list.filter(p => p.isIrStash);
+    }
+
+    // Dimension B: Position (with Kicker exclusion from ALL)
+    const pos = this.state.selectedWaiverPos;
+    if (pos === 'ALL') {
+      list = list.filter(p => p.position !== 'K');
+    } else if (pos === 'FLEX') {
+      list = list.filter(p => ['RB', 'WR', 'TE'].includes(p.position));
+    } else if (pos) {
+      list = list.filter(p => p.position === pos);
+    }
+
+    // Dimension C: Search
+    const q = this.state.waiverSearchQuery;
+    if (q) {
+      list = list.filter(p => {
+        const name = (p.full_name || p.name || '').toLowerCase();
+        const team = (p.team || '').toLowerCase();
+        return name.includes(q) || team.includes(q);
+      });
+    }
+
+    // Sort
+    const sort = this.state.waiverCurrentSort;
+    if (sort === 'trending_adds_desc') {
+      list.sort((a, b) => (b.trending_adds || 0) - (a.trending_adds || 0));
+    } else if (sort === 'delta_desc') {
+      list.sort((a, b) => b.netDelta - a.netDelta);
+    } else if (sort === 'proj_desc') {
+      list.sort((a, b) => b.projected_pts - a.projected_pts);
+    } else if (sort === 'faab_desc') {
+      list.sort((a, b) => (b.faabBids?.aggressive || 0) - (a.faabBids?.aggressive || 0));
+    } else if (sort === 'handcuff_desc') {
+      list.sort((a, b) => (b.contingent_score || 0) - (a.contingent_score || 0));
+    }
+
+    if (list.length === 0) {
+      container.innerHTML = `<div class="waiver-empty-state">No free agents match your filter criteria.</div>`;
+      return;
+    }
+
+    // Limit to top 30 in drawer for optimal DOM performance
+    const renderList = list.slice(0, 30);
+    container.innerHTML = renderList.map(player => {
+      const deltaClass = player.netDelta > 0 ? 'delta-positive' : player.netDelta < 0 ? 'delta-negative' : 'delta-neutral';
+      const deltaPrefix = player.netDelta > 0 ? '+' : '';
+      
+      let tickerHtml = '';
+      if (player.trend && player.trend.type === 'UP') {
+        tickerHtml = `<span class="ticker-pill ticker-up" title="${player.trend.count} adds in 24h">${player.trend.formatted}</span>`;
+      }
+
+      let dropTickerHtml = '';
+      if (player.suggestedDrop?.player?.trend && player.suggestedDrop.player.trend.type === 'DOWN') {
+        dropTickerHtml = `<span class="ticker-pill ticker-down" title="${player.suggestedDrop.player.trend.count} drops in 24h">${player.suggestedDrop.player.trend.formatted}</span>`;
+      }
+
+      return `
+        <div class="waiver-card ${player.isGoldenBone ? 'golden-bone-card' : ''}" style="padding:12px 14px;background:rgba(22,29,43,0.7);border-radius:10px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <img src="${player.avatar || 'https://sleepercdn.com/images/v2/icons/player_default.webp'}" class="waiver-player-avatar" style="width:38px;height:38px;border-radius:50%;object-fit:cover;" onerror="this.onerror=null; this.src='https://sleepercdn.com/images/v2/icons/player_default.webp';" alt="${player.full_name}">
+              <div>
+                <div style="font-size:13px;font-weight:700;color:#fff;display:flex;align-items:center;gap:6px;">
+                  <span>${player.full_name || player.name}</span>
+                  ${tickerHtml}
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-top:1px;">
+                  <span class="pos-tag pos-${player.position}" style="font-size:9.5px;padding:1px 4px;">${player.position}</span>
+                  <span>${player.team || 'FA'}</span>
+                  &middot;
+                  <span style="color:var(--text);font-weight:700;">${player.projected_pts} pts</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="net-delta-pill ${deltaClass}" style="font-size:12px;padding:3px 8px;font-weight:800;border-radius:6px;">
+              <span>NET: ${deltaPrefix}${player.netDelta} PTS</span>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;">
+            <div style="color:var(--text);display:flex;align-items:center;gap:4px;">
+              <span style="color:var(--muted);">Suggested:</span>
+              <span style="font-weight:600;">${player.suggestedDrop?.text || 'Add to Bench'}</span>
+              ${dropTickerHtml}
+            </div>
+            <div style="color:var(--gold);font-weight:700;font-family:var(--font-mono, monospace);">
+              FAAB: $${player.faabBids?.targeted || 1} (${Math.round((player.faabBids?.targeted || 1) / Math.max(1, this.state.waiverFaab) * 100)}%)
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  copyDrawerClaims() {
+    if (!this.state.waiverTargets || this.state.waiverTargets.length === 0) return;
+    const topTargets = this.state.waiverTargets.slice(0, 10);
+    const leagueName = (this.state.currentLeague && this.state.currentLeague.name) || 'Weekly Matchup';
+    const text = this.waiverEngine.generateClipboardPriorityList(topTargets, { leagueName, userFaab: this.state.waiverFaab });
+    
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        this.showToast('📋 Copied Waiver Priority Claims to clipboard! 🐾');
+      }).catch(() => {
+        this.showToast('Priority list generated! 🐾');
+      });
     }
   }
 }

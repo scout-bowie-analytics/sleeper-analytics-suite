@@ -7,6 +7,7 @@
   <link rel="icon" type="image/webp" href="../assets/scout-bowie.webp">
   <link rel="stylesheet" href="../shared/css/sleeper-theme.css">
   <link rel="stylesheet" href="./styles.css?v=5.9.0">
+  <link rel="stylesheet" href="../waiver/styles.css?v=1.0.0">
 
   <!-- Open Graph & Social Cards -->
   <meta property="og:type" content="website">
@@ -32,6 +33,14 @@
     window.openSetupModal = function() { window.weeklyOptimizer && window.weeklyOptimizer.openSetupModal(); };
     window.closeDrawer = function() { window.weeklyOptimizer && window.weeklyOptimizer.closeDrawer(); };
     window.openPlayerDrawer = function(id) { window.weeklyOptimizer && window.weeklyOptimizer.openPlayerDrawer(id); };
+    window.openWaiverDrawer = function() { window.weeklyOptimizer && window.weeklyOptimizer.openWaiverDrawer(); };
+    window.closeWaiverDrawer = function() { window.weeklyOptimizer && window.weeklyOptimizer.closeWaiverDrawer(); };
+    window.onDrawerStrategyToggle = function(s) { window.weeklyOptimizer && window.weeklyOptimizer.onDrawerStrategyToggle(s); };
+    window.onDrawerPosFilter = function(p) { window.weeklyOptimizer && window.weeklyOptimizer.onDrawerPosFilter(p); };
+    window.onDrawerSearchInput = function() { window.weeklyOptimizer && window.weeklyOptimizer.onDrawerSearchInput(); };
+    window.onDrawerSortChanged = function() { window.weeklyOptimizer && window.weeklyOptimizer.onDrawerSortChanged(); };
+    window.onDrawerFaabChanged = function() { window.weeklyOptimizer && window.weeklyOptimizer.onDrawerFaabChanged(); };
+    window.copyDrawerClaims = function() { window.weeklyOptimizer && window.weeklyOptimizer.copyDrawerClaims(); };
     window.onStrategyChange = function(v) { window.weeklyOptimizer && window.weeklyOptimizer.onStrategyChange(v); };
     window.onStrategyModeChange = function(mode) { window.weeklyOptimizer && window.weeklyOptimizer.onStrategyModeChange(mode); };
     window.applyOptimalLineup = function() { window.weeklyOptimizer && window.weeklyOptimizer.applyOptimalLineup(); };
@@ -44,7 +53,6 @@
     window.testEmailNotification = function() { window.weeklyOptimizer && window.weeklyOptimizer.testEmailNotification(); };
     window.dispatchGamedayAlerts = function() { window.weeklyOptimizer && window.weeklyOptimizer.dispatchGamedayAlerts(); };
     window.onDiscordInputChanged = function() { window.weeklyOptimizer && window.weeklyOptimizer.onDiscordInputChanged(); };
-    window.onEmailInputChanged = function() { window.weeklyOptimizer && window.weeklyOptimizer.onEmailInputChanged(); };
     window.importRawMatchupJson = function() { window.weeklyOptimizer && window.weeklyOptimizer.importRawMatchupJson(); };
   </script>
 
@@ -1105,6 +1113,10 @@
         <div class="live-indicator">
           <span class="pulse-dot"></span> <span id="simPerfText">10k SIMS READY</span>
         </div>
+        <button id="btnOpenWaiverDrawer" class="btn-open-waiver-drawer" onclick="openWaiverDrawer()" title="View live waiver wire targets and FAAB recommendations side-by-side with your roster" style="background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.4);color:var(--gold);padding:5px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all 0.2s;">
+          <span>📡 Waiver Radar</span>
+          <span id="waiverUpgradeBadge" class="waiver-upgrade-count-badge" style="background:#eab308;color:#0f172a;font-size:10px;font-weight:800;padding:1px 6px;border-radius:999px;display:none;">0</span>
+        </button>
         <button id="btnGuidedTour" class="btn-guided-tour" onclick="window.startGuidedTour()" title="Start Scout Bowie Guided Feature Tour">🧭 Guided Tour</button>
         <button class="reset-btn" onclick="openSetupModal()">Change Matchup</button>
       </div>
@@ -1292,6 +1304,109 @@
 
       </div>
 
+    </div>
+
+  </div>
+
+  <!-- Floating Quick Launch Waiver Button -->
+  <button id="floatingWaiverBtn" class="floating-waiver-trigger" onclick="openWaiverDrawer()" title="Open Waiver Radar Drawer" style="position:fixed;bottom:24px;left:24px;z-index:95;background:linear-gradient(135deg, rgba(234,179,8,0.2) 0%, rgba(15,23,42,0.95) 100%);border:1.5px solid rgba(234,179,8,0.5);color:#fff;padding:8px 16px;border-radius:999px;font-size:12px;font-weight:800;display:flex;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(0,0,0,0.5), 0 0 12px rgba(234,179,8,0.2);cursor:pointer;backdrop-filter:blur(8px);transition:all 0.2s cubic-bezier(0.175,0.885,0.32,1.275);">
+    <span style="font-size:14px;">📡</span>
+    <span>WAIVER RADAR</span>
+    <span id="floatingUpgradeBadge" class="floating-upgrade-badge" style="background:#eab308;color:#0f172a;font-size:10px;font-weight:900;padding:1px 6px;border-radius:999px;display:none;">0</span>
+  </button>
+
+  <!-- Waiver Wire Radar Sliding Side Drawer -->
+  <div id="waiverDrawerOverlay" class="waiver-drawer-overlay" onclick="closeWaiverDrawer()"></div>
+  <div id="waiverRadarDrawer" class="waiver-radar-drawer">
+    
+    <!-- Drawer Top Header -->
+    <div class="waiver-drawer-header">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:18px;">📡</span>
+          <div>
+            <div style="font-size:15px;font-weight:800;color:#fff;display:flex;align-items:center;gap:6px;">
+              <span>Waiver Wire Radar</span>
+              <span class="golden-bone-badge" style="font-size:9px;padding:1px 5px;">FAAB LAB</span>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:1px;">Live Free Agent Upgrades vs Active Bench</div>
+          </div>
+        </div>
+        <button class="drawer-close" onclick="closeWaiverDrawer()" style="position:static;font-size:24px;line-height:1;cursor:pointer;background:none;border:none;color:var(--muted);">&times;</button>
+      </div>
+
+      <!-- FAAB Budget Pill & Quick Summary -->
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:12px;background:rgba(11,16,25,0.5);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:6px 10px;">
+        <div id="waiverDrawerSummary" style="color:var(--text);font-size:11.5px;font-weight:600;">
+          Scanning free agents vs active bench...
+        </div>
+        <div class="faab-budget-pill" style="font-size:11px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);border-radius:6px;color:var(--gold);font-weight:700;" title="Remaining FAAB Budget">
+          <span>FAAB: $</span>
+          <input type="number" id="drawerFaabInput" class="faab-input-edit" value="100" min="0" max="1000" style="width:45px;font-size:11px;background:transparent;border:none;color:var(--gold);font-weight:800;text-align:right;" onchange="onDrawerFaabChanged()">
+        </div>
+      </div>
+    </div>
+
+    <!-- Drawer Body -->
+    <div class="waiver-drawer-body">
+      
+      <!-- Market Velocity Strip -->
+      <div id="drawerMarketVelocityBanner" class="market-velocity-banner" style="display:none;margin-bottom:10px;padding:6px 10px;">
+        <div class="market-velocity-title" style="font-size:10.5px;">
+          <span>📈</span>
+          <span style="color:#4ade80;">VELOCITY:</span>
+        </div>
+        <div id="drawerMarketVelocityChips" class="market-velocity-chips" style="gap:6px;"></div>
+      </div>
+
+      <!-- Strategy Toggles -->
+      <div class="filter-pills-group" id="drawerStrategyPills" style="margin-bottom:8px;gap:5px;flex-wrap:wrap;display:flex;">
+        <button class="filter-pill" data-strategy="upgrade" onclick="onDrawerStrategyToggle('upgrade')" style="font-size:11px;padding:3px 8px;">⚡ Upgrades</button>
+        <button class="filter-pill" data-strategy="trending" onclick="onDrawerStrategyToggle('trending')" style="font-size:11px;padding:3px 8px;">📈 Trending Adds</button>
+        <button class="filter-pill" data-strategy="streamer" onclick="onDrawerStrategyToggle('streamer')" style="font-size:11px;padding:3px 8px;">🛡️ Streamers</button>
+        <button class="filter-pill" data-strategy="handcuff" onclick="onDrawerStrategyToggle('handcuff')" style="font-size:11px;padding:3px 8px;">🔥 Handcuffs</button>
+        <button class="filter-pill" data-strategy="ir_stash" onclick="onDrawerStrategyToggle('ir_stash')" style="font-size:11px;padding:3px 8px;">⏳ IR Watch</button>
+      </div>
+
+      <!-- Positional Filter Buttons -->
+      <div class="filter-pills-group" id="drawerPosPills" style="margin-bottom:10px;gap:3px;flex-wrap:wrap;display:flex;">
+        <button class="filter-pill active" data-pos="ALL" onclick="onDrawerPosFilter('ALL')" style="font-size:11px;padding:2px 7px;">ALL</button>
+        <button class="filter-pill" data-pos="QB" onclick="onDrawerPosFilter('QB')" style="font-size:11px;padding:2px 7px;">QB</button>
+        <button class="filter-pill" data-pos="RB" onclick="onDrawerPosFilter('RB')" style="font-size:11px;padding:2px 7px;">RB</button>
+        <button class="filter-pill" data-pos="WR" onclick="onDrawerPosFilter('WR')" style="font-size:11px;padding:2px 7px;">WR</button>
+        <button class="filter-pill" data-pos="TE" onclick="onDrawerPosFilter('TE')" style="font-size:11px;padding:2px 7px;">TE</button>
+        <button class="filter-pill" data-pos="FLEX" onclick="onDrawerPosFilter('FLEX')" style="font-size:11px;padding:2px 7px;">FLEX</button>
+        <button class="filter-pill" data-pos="K" onclick="onDrawerPosFilter('K')" style="font-size:11px;padding:2px 7px;">K</button>
+        <button class="filter-pill" data-pos="DEF" onclick="onDrawerPosFilter('DEF')" style="font-size:11px;padding:2px 7px;">DEF</button>
+      </div>
+
+      <!-- Search & Sort Bar -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <input type="text" id="drawerWaiverSearch" class="waiver-search-input" placeholder="Search player/team..." style="flex:1;font-size:11.5px;padding:5px 9px;" oninput="onDrawerSearchInput()">
+        <select id="drawerWaiverSort" class="waiver-sort-select" style="font-size:11px;padding:5px 8px;width:auto;" onchange="onDrawerSortChanged()">
+          <option value="delta_desc">Net Upgrade (High to Low)</option>
+          <option value="trending_adds_desc">Trending Adds (Fastest Rising 🚀)</option>
+          <option value="proj_desc">Projected Points</option>
+          <option value="faab_desc">FAAB Priority</option>
+          <option value="handcuff_desc">Contingent Upside</option>
+        </select>
+      </div>
+
+      <!-- Cards Container -->
+      <div id="drawerWaiverCardsList" class="waiver-cards-container" style="display:flex;flex-direction:column;gap:10px;">
+        <div class="waiver-empty-state">Loading waiver targets...</div>
+      </div>
+
+    </div>
+
+    <!-- Drawer Footer Actions -->
+    <div class="waiver-drawer-footer" style="padding:12px 16px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;background:rgba(15,23,42,0.98);">
+      <button class="btn-copy-claims" onclick="copyDrawerClaims()" style="padding:6px 14px;font-size:12px;background:rgba(234,179,8,0.15);border:1px solid rgba(234,179,8,0.4);color:var(--gold);border-radius:6px;font-weight:700;cursor:pointer;">
+        <span>📋 Copy Priority Claims</span>
+      </button>
+      <a href="../waiver/index.html" target="_blank" style="color:var(--muted);text-decoration:none;font-size:11.5px;display:flex;align-items:center;gap:4px;">
+        <span>Full Page Radar ↗</span>
+      </a>
     </div>
 
   </div>
