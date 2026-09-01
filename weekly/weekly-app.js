@@ -335,6 +335,21 @@ class WeeklyOptimizerController {
     window.optimizeLineup = (mode) => this.optimizeLineup(mode);
     window.applyOptimalLineup = () => this.applyOptimalLineup();
     window.onStarterDropdownChange = (slotIndex, newPlayerId) => this.onStarterDropdownChange(slotIndex, newPlayerId);
+    window.onConfirmSwap = (slotIndex, newPlayerId) => this.onConfirmSwap(slotIndex, newPlayerId);
+    window.onCancelSwapPreview = (slotIndex) => this.onCancelSwapPreview(slotIndex);
+    
+    // Keyboard shortcut: Escape cancels active swap preview or drawer
+    if (typeof window !== 'undefined' && !window.__escapeKeyBound) {
+      window.__escapeKeyBound = true;
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          if (this.state.activeSwapPreview) {
+            this.onCancelSwapPreview(this.state.activeSwapPreview.slotIdx);
+          }
+        }
+      });
+    }
+
     window.triggerBowieEasterEgg = (el) => this.triggerBowieEasterEgg(el);
     window.setOddsApiKey = (key) => setOddsApiKey(key);
     window.onTeamViewChange = (view) => this.onTeamViewChange(view);
@@ -2407,12 +2422,12 @@ class WeeklyOptimizerController {
         `;
 
         rangeCellHtml = `
-          <div style="display:flex;flex-direction:column;gap:2px;">
+          <div style="display:flex;flex-direction:column;gap:3px;min-width:180px;">
             ${renderProjectionRangeBar(candDist)}
             <div class="preview-delta-bar">
-              <span style="color:${floorDelta >= 0 ? '#34d399' : '#f43f5e'};font-weight:700;">Floor: ${floorDelta >= 0 ? '+' : ''}${floorDelta.toFixed(1)}</span>
-              <span style="color:${projDelta >= 0 ? '#34d399' : '#f43f5e'};font-weight:800;">Exp: ${projDelta >= 0 ? '+' : ''}${projDelta.toFixed(1)}</span>
-              <span style="color:${ceilDelta >= 0 ? '#34d399' : '#f43f5e'};font-weight:700;">Ceil: ${ceilDelta >= 0 ? '+' : ''}${ceilDelta.toFixed(1)}</span>
+              <span class="preview-delta-pill ${floorDelta > 0.3 ? 'pos' : floorDelta < -0.3 ? 'neg' : 'neu'}">Floor: ${floorDelta >= 0 ? '+' : ''}${floorDelta.toFixed(1)}</span>
+              <span class="preview-delta-pill ${projDelta > 0.3 ? 'pos' : projDelta < -0.3 ? 'neg' : 'neu'}">Exp: ${projDelta >= 0 ? '+' : ''}${projDelta.toFixed(1)}</span>
+              <span class="preview-delta-pill ${ceilDelta > 0.3 ? 'pos' : ceilDelta < -0.3 ? 'neg' : 'neu'}">Ceil: ${ceilDelta >= 0 ? '+' : ''}${ceilDelta.toFixed(1)}</span>
             </div>
           </div>
         `;

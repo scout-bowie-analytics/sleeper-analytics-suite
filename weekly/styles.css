@@ -1216,13 +1216,40 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.preview-delta-pill {
   font-size: 10px;
   font-family: var(--font-mono, monospace);
-  margin-top: 3px;
+  font-weight: 800;
   padding: 2px 6px;
-  background: rgba(0, 0, 0, 0.3);
   border-radius: 4px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+}
+
+.preview-delta-pill.pos {
+  background: rgba(16, 185, 129, 0.22);
+  border: 1px solid rgba(16, 185, 129, 0.55);
+  color: #34d399;
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.preview-delta-pill.neg {
+  background: rgba(239, 68, 68, 0.22);
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  color: #f87171;
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+.preview-delta-pill.neu {
+  background: rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #e2e8f0;
 }
 
 
