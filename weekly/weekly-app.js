@@ -3010,11 +3010,44 @@ class WeeklyOptimizerController {
         if (faabInput) faabInput.value = remainingFaab;
       }
 
+      // Check if current league state is Week 0 / Pre-Season (where everyone is a Free Add)
+      const leagueStatus = this.state.league?.status || '';
+      const currentWeek = Number(this.state.currentWeek ?? this.state.league?.settings?.leg ?? 0);
+      const isWeek0 = leagueStatus === 'pre_draft' || 
+                      leagueStatus === 'drafting' || 
+                      (leagueStatus === 'complete' && currentWeek === 0) || 
+                      (currentWeek <= 1 && (this.state.league?.season_type === 'pre' || !this.state.league?.settings?.leg || this.state.league?.settings?.leg === 0));
+
+      // Fetch historical waiver transactions if in-season
+      let historicalTransactions = [];
+      try {
+        if (this.state.currentLeagueId && currentWeek > 1) {
+          const txList = await sleeperApi.getTransactions(this.state.currentLeagueId, currentWeek - 1);
+          if (Array.isArray(txList)) {
+            historicalTransactions = txList
+              .filter(t => t.type === 'waiver' && t.status === 'complete' && t.settings?.waiver_bid !== undefined)
+              .map(t => ({
+                bid: Number(t.settings.waiver_bid) || 0,
+                roster_id: t.roster_ids?.[0],
+                adds: t.adds
+              }));
+          }
+        }
+      } catch (e) {
+        console.warn('Waiver transaction history unavailable:', e);
+      }
+
       // Process Net Deltas, FAAB Bids, and Streaming Matrix
       this.state.waiverTargets = this.waiverEngine.processWaiverWire(
         freeAgents,
         userAnalysis,
-        { userFaab: this.state.waiverFaab }
+        {
+          userFaab: this.state.waiverFaab,
+          isWeek0,
+          currentWeek,
+          leagueSettings: this.state.league?.settings,
+          historicalTransactions
+        }
       );
 
       // Count positive net upgrades
@@ -3250,8 +3283,8 @@ class WeeklyOptimizerController {
         dropTickerHtml = `<span class="ticker-pill ticker-down" title="${player.suggestedDrop.player.trend.count} drops in 24h">${player.suggestedDrop.player.trend.formatted}</span>`;
       }
 
-      const targetedBid = player.faabBids?.targeted?.dollars ?? 1;
-      const targetedPct = player.faabBids?.targeted?.percent ?? 1;
+      const bidLabel = player.faabBid?.label || `$${player.faabBids?.targeted?.dollars ?? 0} (${player.faabBids?.targeted?.percent ?? 0}%)`;
+      const isFree = Boolean(player.faabBid?.isFreeAdd);
 
       const avatarUrl = player.avatar || (player.position === 'DEF' 
         ? `https://sleepercdn.com/images/team_logos/nfl/${(player.team || player.player_id || '').toLowerCase()}.png`
@@ -3289,7 +3322,7 @@ class WeeklyOptimizerController {
               ${dropTickerHtml}
             </div>
             <div class="drawer-faab-bid">
-              FAAB: $${targetedBid} (${targetedPct}%)
+              FAAB: <span style="color: ${isFree ? '#34d399' : 'var(--gold)'}; font-weight: 800;">${bidLabel}</span>
             </div>
           </div>
         </div>

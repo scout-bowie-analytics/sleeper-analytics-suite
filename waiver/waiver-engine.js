@@ -474,8 +474,9 @@ export class WaiverEngine {
       // Calculate Streaming Matchup Score
       const streamingScore = this.calculateStreamingScore(fa);
 
-      // Calculate Tiered FAAB Recommendations
-      const faabBids = this.calculateFaabBids(fa, netDelta, userFaab);
+      // Calculate Single Smart FAAB Recommendation & Tiered Fallback
+      const faabBid = this.calculateSmartFaabBid(fa, netDelta, userFaab, leagueState);
+      const faabBids = this.calculateFaabBids(fa, netDelta, userFaab, leagueState);
 
       // Determine Badges
       const badges = [];
@@ -503,6 +504,7 @@ export class WaiverEngine {
         netDelta,
         suggestedDrop,
         streamingScore,
+        faabBid,
         faabBids,
         badges,
         isGoldenBone: false // Will mark top value per pos below
@@ -661,61 +663,131 @@ export class WaiverEngine {
   }
 
   /**
-   * Tiered FAAB Bid Range Guidance
+   * Single Smart FAAB Bidding Optimizer
+   * Calculates 1 precise recommended dollar amount based on Week/State awareness,
+   * Net Delta, Role Inheritance, Market Velocity, Time Decay, and League Transaction History.
    */
-  calculateFaabBids(player, netDelta, userFaab = 100) {
+  calculateSmartFaabBid(player, netDelta, userFaab = 100, leagueContext = {}) {
+    const isWeek0 = Boolean(leagueContext.isWeek0 || leagueContext.isFreeAgencyPeriod);
+    const isExplicitWaiver = Boolean(player.is_on_waivers || player.waiver_status === 'waivers');
+
+    // In Week 0 / Pre-Season (or Open Free Agency without a waiver hold), price is $0 Free Add
+    if (isWeek0 && !isExplicitWaiver) {
+      return {
+        dollars: 0,
+        percent: 0,
+        isFreeAdd: true,
+        label: '$0 (Free Add)'
+      };
+    }
+
+    const faab = Math.max(0, userFaab);
+    if (faab === 0) {
+      return {
+        dollars: 0,
+        percent: 0,
+        isFreeAdd: false,
+        label: '$0 (0%)'
+      };
+    }
+
+    const pos = player.position || 'FLEX';
+    let basePct = 0.05; // 5% default flier
+
+    // 1. Role & Net Delta Impact
+    if (player.isNextManUp && player.inheritance) {
+      const injStatus = (player.inheritance.injuredPlayer?.injury_status || player.inheritance.injuredPlayer?.status || '').toUpperCase();
+      const isLongTerm = ['IR', 'PUP', 'SUSPENDED'].includes(injStatus);
+      if (pos === 'RB') {
+        basePct = isLongTerm ? 0.32 : 0.16; // Rest of season workhorse vs short rental
+      } else {
+        basePct = isLongTerm ? 0.22 : 0.12;
+      }
+    } else if (netDelta >= 5.0) {
+      basePct = 0.22;
+    } else if (netDelta >= 3.0) {
+      basePct = 0.14;
+    } else if (player.contingent_score >= 85) {
+      basePct = 0.12; // Elite handcuff
+    } else if (netDelta > 1.5) {
+      basePct = 0.08;
+    } else if (pos === 'DEF' || pos === 'K') {
+      basePct = 0.02; // Streamers rarely command high FAAB
+    } else {
+      basePct = 0.03;
+    }
+
+    // 2. National Market Velocity Booster (clearing consensus frenzies)
+    const adds = Number(player.trending_adds || 0);
+    if (adds >= 50000) {
+      basePct += 0.05;
+    } else if (adds >= 15000) {
+      basePct += 0.03;
+    }
+
+    // 3. League Historical Spending Pattern Adjustment (if past transactions exist)
+    if (Array.isArray(leagueContext.historicalTransactions) && leagueContext.historicalTransactions.length > 0) {
+      const posTx = leagueContext.historicalTransactions.filter(t => t.position === pos && t.bid > 0);
+      if (posTx.length > 0) {
+        const avgBid = posTx.reduce((sum, t) => sum + t.bid, 0) / posTx.length;
+        const totalLeagueBudget = Number(leagueContext.leagueSettings?.waiver_budget || 100);
+        const avgPct = avgBid / totalLeagueBudget;
+        // Blend 70% model base, 30% league historical norm
+        basePct = (basePct * 0.7) + (avgPct * 0.3);
+      }
+    }
+
+    // 4. Season Time Decay (ROI depreciation)
+    const currentWeek = Number(leagueContext.currentWeek || 1);
+    let timeDecay = 1.0;
+    if (currentWeek >= 9) {
+      timeDecay = 0.70;
+    } else if (currentWeek >= 5) {
+      timeDecay = 0.85;
+    }
+    const finalPct = Math.min(0.75, Math.max(0.01, basePct * timeDecay));
+
+    // Calculate smart dollar amount
+    let smartDollars = Math.round(faab * finalPct);
+    smartDollars = Math.max(1, Math.min(faab, smartDollars));
+    const smartPct = Math.round((smartDollars / (leagueContext.leagueSettings?.waiver_budget || faab || 100)) * 100);
+
+    return {
+      dollars: smartDollars,
+      percent: smartPct,
+      isFreeAdd: false,
+      label: `$${smartDollars} (${smartPct}%)`
+    };
+  }
+
+  /**
+   * Tiered FAAB Bid Range Guidance (Derived from Single Smart FAAB)
+   */
+  calculateFaabBids(player, netDelta, userFaab = 100, leagueContext = {}) {
+    const smart = this.calculateSmartFaabBid(player, netDelta, userFaab, leagueContext);
+    if (smart.isFreeAdd) {
+      return {
+        aggressive: { dollars: 0, percent: 0, label: 'Free Add' },
+        targeted: smart,
+        speculative: { dollars: 0, percent: 0, label: 'Free Add' }
+      };
+    }
+
     const faab = Math.max(1, userFaab);
-    const pos = player.position;
-
-    let aggPct = 0.22;
-    let targetPct = 0.10;
-    let specPct = 0.03;
-
-    // Next Man Up (Inherited Starter Role) triggers top-tier aggressive bidding
-    if (player.isNextManUp && player.position === 'RB') {
-      aggPct = 0.45;
-      targetPct = 0.25;
-      specPct = 0.08;
-    } else if (player.isNextManUp) {
-      aggPct = 0.35;
-      targetPct = 0.18;
-      specPct = 0.05;
-    } else if (netDelta >= 4.0 || player.contingent_score >= 90) {
-      aggPct = 0.32;
-      targetPct = 0.16;
-      specPct = 0.05;
-    } else if (netDelta <= 1.0 && player.contingent_score < 70) {
-      aggPct = 0.12;
-      targetPct = 0.06;
-      specPct = 0.02;
-    }
-
-    // DEF and K rarely warrant heavy FAAB
-    if (pos === 'DEF' || pos === 'K') {
-      aggPct = 0.08;
-      targetPct = 0.04;
-      specPct = 0.01;
-    }
-
-    const aggressive = Math.max(2, Math.round(faab * aggPct));
-    const targeted = Math.max(1, Math.round(faab * targetPct));
-    const speculative = Math.max(0, Math.min(3, Math.round(faab * specPct)));
+    const aggDollars = Math.min(faab, Math.round(smart.dollars * 1.5));
+    const specDollars = Math.max(0, Math.round(smart.dollars * 0.4));
 
     return {
       aggressive: {
-        dollars: aggressive,
-        percent: Math.round(aggPct * 100),
-        label: 'Aggressive (Must-Win)'
+        dollars: aggDollars,
+        percent: Math.round((aggDollars / faab) * 100),
+        label: 'Aggressive'
       },
-      targeted: {
-        dollars: targeted,
-        percent: Math.round(targetPct * 100),
-        label: 'Targeted (Value Bid)'
-      },
+      targeted: smart,
       speculative: {
-        dollars: speculative,
-        percent: Math.round(specPct * 100),
-        label: 'Speculative Flier'
+        dollars: specDollars,
+        percent: Math.round((specDollars / faab) * 100),
+        label: 'Speculative'
       }
     };
   }
@@ -738,8 +810,9 @@ export class WaiverEngine {
       topClaims.forEach((item, index) => {
         const dropText = item.suggestedDrop ? item.suggestedDrop.text : 'Drop Bench Player';
         const deltaPrefix = item.netDelta >= 0 ? `+${item.netDelta}` : `${item.netDelta}`;
+        const bidLabel = item.faabBid?.label || `$${item.faabBids?.targeted?.dollars ?? 0}`;
         lines.push(`[${index + 1}] ADD: ${item.full_name} (${item.position} - ${item.team || 'FA'})`);
-        lines.push(`    BID: $${item.faabBids.targeted.dollars} (${item.faabBids.targeted.percent}% FAAB) | Aggressive: $${item.faabBids.aggressive.dollars}`);
+        lines.push(`    BID: ${bidLabel}`);
         lines.push(`    ACTION: ${dropText} (Net: ${deltaPrefix} pts)`);
         lines.push(``);
       });

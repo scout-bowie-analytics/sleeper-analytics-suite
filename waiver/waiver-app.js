@@ -278,11 +278,44 @@ class WaiverApp {
       if (faabInput) faabInput.value = remainingFaab;
     }
 
+    // Check if current league state is Week 0 / Pre-Season (where everyone is a Free Add)
+    const leagueStatus = this.state.currentLeague?.status || '';
+    const currentWeek = Number(this.state.currentLeague?.settings?.leg ?? 0);
+    const isWeek0 = leagueStatus === 'pre_draft' || 
+                    leagueStatus === 'drafting' || 
+                    (leagueStatus === 'complete' && currentWeek === 0) || 
+                    (currentWeek <= 1 && (this.state.currentLeague?.season_type === 'pre' || !this.state.currentLeague?.settings?.leg || this.state.currentLeague?.settings?.leg === 0));
+
+    // Fetch historical waiver transactions if in-season
+    let historicalTransactions = [];
+    try {
+      if (this.state.currentLeague?.league_id && currentWeek > 1) {
+        const txList = await this.api.getTransactions(this.state.currentLeague.league_id, currentWeek - 1);
+        if (Array.isArray(txList)) {
+          historicalTransactions = txList
+            .filter(t => t.type === 'waiver' && t.status === 'complete' && t.settings?.waiver_bid !== undefined)
+            .map(t => ({
+              bid: Number(t.settings.waiver_bid) || 0,
+              roster_id: t.roster_ids?.[0],
+              adds: t.adds
+            }));
+        }
+      }
+    } catch (e) {
+      console.warn('Waiver transaction history unavailable:', e);
+    }
+
     // 5. Process Net Deltas, FAAB Bids, and Streaming Matrix
     this.state.processedTargets = this.engine.processWaiverWire(
       freeAgents,
       this.state.userAnalysis,
-      { userFaab: this.state.userFaab }
+      {
+        userFaab: this.state.userFaab,
+        isWeek0,
+        currentWeek,
+        leagueSettings: this.state.currentLeague?.settings,
+        historicalTransactions
+      }
     );
 
     // Update UI Header
@@ -559,19 +592,14 @@ class WaiverApp {
             </div>
           </div>
 
-          <!-- Col 2: FAAB Bid Range -->
-          <div class="faab-bid-matrix">
-            <div class="faab-tier-row">
-              <span class="faab-tier-label">🎯 Targeted Value:</span>
-              <span class="faab-tier-val target-val">$${item.faabBids.targeted.dollars} (${item.faabBids.targeted.percent}%)</span>
+          <!-- Col 2: Single Smart FAAB Bid -->
+          <div class="smart-faab-card">
+            <div class="smart-faab-label">Recommended FAAB</div>
+            <div class="smart-faab-value ${item.faabBid?.isFreeAdd ? 'smart-faab-free' : ''}">
+              ${item.faabBid?.label || `$${item.faabBids?.targeted?.dollars ?? 0} (${item.faabBids?.targeted?.percent ?? 0}%)`}
             </div>
-            <div class="faab-tier-row">
-              <span class="faab-tier-label">🔥 Aggressive (Must-Win):</span>
-              <span class="faab-tier-val">$${item.faabBids.aggressive.dollars} (${item.faabBids.aggressive.percent}%)</span>
-            </div>
-            <div class="faab-tier-row">
-              <span class="faab-tier-label">🎲 Speculative Flier:</span>
-              <span class="faab-tier-val">$${item.faabBids.speculative.dollars} (${item.faabBids.speculative.percent}%)</span>
+            <div class="smart-faab-context">
+              ${item.faabBid?.isFreeAdd ? '⚡ Free Add (Week 0 / Open FA)' : '🎯 Optimal Clearing Price'}
             </div>
           </div>
 

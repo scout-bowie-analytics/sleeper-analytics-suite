@@ -407,36 +407,52 @@
 }
 
 /* Col 2: FAAB Bid Range Box */
-.faab-bid-matrix {
+/* Col 2: Single Smart FAAB Bid Card */
+.smart-faab-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  background: rgba(11, 16, 25, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
-  padding: 8px 12px;
-}
-
-.faab-tier-row {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  font-size: 0.76rem;
+  justify-content: center;
+  text-align: center;
+  gap: 3px;
+  background: rgba(11, 16, 25, 0.65);
+  border: 1px solid rgba(234, 179, 8, 0.22);
+  border-radius: 8px;
+  padding: 10px 14px;
+  transition: all 0.15s ease;
 }
 
-.faab-tier-label {
+.smart-faab-card:hover {
+  border-color: rgba(234, 179, 8, 0.5);
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.smart-faab-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: #94a3b8;
-  font-weight: 600;
 }
 
-.faab-tier-val {
-  font-weight: 800;
-  color: #f8fafc;
-}
-
-.faab-tier-val.target-val {
+.smart-faab-value {
+  font-size: 1.15rem;
+  font-weight: 900;
+  font-family: var(--font-mono, monospace);
   color: var(--gold);
-  font-size: 0.82rem;
+  text-shadow: 0 0 12px rgba(234, 179, 8, 0.25);
+  letter-spacing: -0.02em;
+}
+
+.smart-faab-value.smart-faab-free {
+  color: #34d399 !important;
+  text-shadow: 0 0 12px rgba(52, 211, 153, 0.35);
+}
+
+.smart-faab-context {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #64748b;
 }
 
 /* Col 3: Suggested Drop Container */
