@@ -22,6 +22,8 @@ class WaiverApp {
       userAnalysis: null,
       processedTargets: [],
       filteredTargets: [],
+      selectedStrategy: null,
+      selectedPosition: 'ALL',
       currentFilter: 'all',
       currentSort: 'delta_desc',
       searchQuery: '',
@@ -37,6 +39,8 @@ class WaiverApp {
     window.loadSampleWaiverPool = () => this.loadSampleWaiverPool();
     window.openSetupModal = () => this.openSetupModal();
     window.closeSetupModal = () => this.closeSetupModal();
+    window.onToggleStrategy = (strat) => this.onToggleStrategy(strat);
+    window.onFilterPosition = (pos) => this.onFilterPosition(pos);
     window.onFilterCategory = (filter) => this.onFilterCategory(filter);
     window.onSortChanged = () => this.onSortChanged();
     window.onSearchInput = () => this.onSearchInput();
@@ -275,12 +279,32 @@ class WaiverApp {
     this.applyFiltersAndSort();
   }
 
-  onFilterCategory(filter) {
-    this.state.currentFilter = filter;
-    document.querySelectorAll('#filterPillsGroup .filter-pill').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.filter === filter);
+  onToggleStrategy(strategy) {
+    if (this.state.selectedStrategy === strategy) {
+      this.state.selectedStrategy = null; // Toggle off
+    } else {
+      this.state.selectedStrategy = strategy;
+    }
+    document.querySelectorAll('#strategyPillsGroup .filter-pill').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.strategy === this.state.selectedStrategy);
     });
     this.applyFiltersAndSort();
+  }
+
+  onFilterPosition(pos) {
+    this.state.selectedPosition = pos || 'ALL';
+    document.querySelectorAll('#posPillsGroup .filter-pill').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.pos === this.state.selectedPosition);
+    });
+    this.applyFiltersAndSort();
+  }
+
+  onFilterCategory(filter) {
+    if (['upgrade', 'streamer', 'handcuff', 'ir_stash'].includes(filter)) {
+      this.onToggleStrategy(filter);
+    } else {
+      this.onFilterPosition(filter === 'all' ? 'ALL' : filter);
+    }
   }
 
   onSortChanged() {
@@ -317,32 +341,38 @@ class WaiverApp {
   applyFiltersAndSort() {
     let list = [...this.state.processedTargets];
 
-    // Filter by Category
-    const f = this.state.currentFilter;
-    if (f === 'upgrade') {
+    // Dimension A: Filter by Strategy Toggle (if active)
+    const strat = this.state.selectedStrategy;
+    if (strat === 'upgrade') {
       list = list.filter(p => p.netDelta > 0 && !p.isIrStash);
-    } else if (f === 'ir_stash') {
-      list = list.filter(p => p.isIrStash);
-    } else if (f === 'streamer') {
+    } else if (strat === 'streamer') {
       list = list.filter(p => p.streamingScore >= 75 && !p.isIrStash);
-    } else if (f === 'handcuff') {
+    } else if (strat === 'handcuff') {
       list = list.filter(p => p.contingent_score >= 75 && !p.isIrStash);
-    } else if (['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(f)) {
-      list = list.filter(p => p.position === f);
+    } else if (strat === 'ir_stash') {
+      list = list.filter(p => p.isIrStash);
     }
 
-    // Filter by Search
+    // Dimension B: Filter by Position (ALL / QB / RB / WR / TE / FLEX / K / DEF)
+    const pos = this.state.selectedPosition;
+    if (pos === 'FLEX') {
+      list = list.filter(p => ['RB', 'WR', 'TE'].includes(p.position));
+    } else if (pos && pos !== 'ALL') {
+      list = list.filter(p => p.position === pos);
+    }
+
+    // Dimension C: Filter by Search Query
     const q = this.state.searchQuery;
     if (q) {
       list = list.filter(p => {
         const name = (p.full_name || p.name || '').toLowerCase();
         const team = (p.team || '').toLowerCase();
-        const pos = (p.position || '').toLowerCase();
-        return name.includes(q) || team.includes(q) || pos.includes(q);
+        const playerPos = (p.position || '').toLowerCase();
+        return name.includes(q) || team.includes(q) || playerPos.includes(q);
       });
     }
 
-    // Sort
+    // Dimension D: Sort Order
     const s = this.state.currentSort;
     if (s === 'delta_desc') {
       list.sort((a, b) => b.netDelta - a.netDelta);

@@ -126,18 +126,26 @@
 
     <!-- Filter & Sort Toolbar -->
     <div class="waiver-toolbar">
-      <div class="filter-pills-group" id="filterPillsGroup">
-        <button class="filter-pill active" data-filter="all" onclick="onFilterCategory('all')">All Available</button>
-        <button class="filter-pill" data-filter="upgrade" onclick="onFilterCategory('upgrade')">⚡ Top Upgrades</button>
-        <button class="filter-pill" data-filter="ir_stash" onclick="onFilterCategory('ir_stash')">⏳ IR Return Watch</button>
-        <button class="filter-pill" data-filter="streamer" onclick="onFilterCategory('streamer')">🛡️ Streamers</button>
-        <button class="filter-pill" data-filter="handcuff" onclick="onFilterCategory('handcuff')">🔥 High-Upside Handcuffs</button>
-        <button class="filter-pill" data-filter="QB" onclick="onFilterCategory('QB')">QB</button>
-        <button class="filter-pill" data-filter="RB" onclick="onFilterCategory('RB')">RB</button>
-        <button class="filter-pill" data-filter="WR" onclick="onFilterCategory('WR')">WR</button>
-        <button class="filter-pill" data-filter="TE" onclick="onFilterCategory('TE')">TE</button>
-        <button class="filter-pill" data-filter="K" onclick="onFilterCategory('K')">K</button>
-        <button class="filter-pill" data-filter="DEF" onclick="onFilterCategory('DEF')">DEF</button>
+      <!-- Strategy Toggles -->
+      <div class="filter-pills-group" id="strategyPillsGroup">
+        <button class="filter-pill" data-strategy="upgrade" onclick="onToggleStrategy('upgrade')">⚡ Top Upgrades</button>
+        <button class="filter-pill" data-strategy="streamer" onclick="onToggleStrategy('streamer')">🛡️ Streamers</button>
+        <button class="filter-pill" data-strategy="handcuff" onclick="onToggleStrategy('handcuff')">🔥 High-Upside Handcuffs</button>
+        <button class="filter-pill" data-strategy="ir_stash" onclick="onToggleStrategy('ir_stash')">⏳ IR Return Watch</button>
+      </div>
+
+      <div style="height:22px;width:1px;background:rgba(255,255,255,0.12);margin:0 4px;" class="toolbar-divider"></div>
+
+      <!-- Positional Filters -->
+      <div class="filter-pills-group" id="posPillsGroup">
+        <button class="filter-pill active" data-pos="ALL" onclick="onFilterPosition('ALL')">ALL</button>
+        <button class="filter-pill" data-pos="QB" onclick="onFilterPosition('QB')">QB</button>
+        <button class="filter-pill" data-pos="RB" onclick="onFilterPosition('RB')">RB</button>
+        <button class="filter-pill" data-pos="WR" onclick="onFilterPosition('WR')">WR</button>
+        <button class="filter-pill" data-pos="TE" onclick="onFilterPosition('TE')">TE</button>
+        <button class="filter-pill" data-pos="FLEX" onclick="onFilterPosition('FLEX')">FLEX</button>
+        <button class="filter-pill" data-pos="K" onclick="onFilterPosition('K')">K</button>
+        <button class="filter-pill" data-pos="DEF" onclick="onFilterPosition('DEF')">DEF</button>
       </div>
 
       <div class="toolbar-actions">
