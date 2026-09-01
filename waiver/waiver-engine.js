@@ -315,12 +315,19 @@ export class WaiverEngine {
 
     const weakestBench = bench.length > 0 ? bench[0] : null;
 
-    // Weakest by position
+    // Weakest by position (for K and DEF, prioritize existing K/DEF assets to prevent dropping skill players)
     const weakestByPos = {};
     ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].forEach(pos => {
       const posBench = bench.filter(p => p.position === pos);
       posBench.sort((a, b) => a.projected_pts - b.projected_pts);
-      weakestByPos[pos] = posBench.length > 0 ? posBench[0] : weakestBench;
+      if (posBench.length > 0) {
+        weakestByPos[pos] = posBench[0];
+      } else if (pos === 'K' || pos === 'DEF') {
+        const starterAsset = starters.find(p => p.position === pos);
+        weakestByPos[pos] = starterAsset || null;
+      } else {
+        weakestByPos[pos] = weakestBench;
+      }
     });
 
     return {
@@ -349,7 +356,36 @@ export class WaiverEngine {
       let netDelta = 0;
       let isFreeAdd = false;
 
-      if (userAnalysis.hasOpenIrMove && userAnalysis.irEligiblePlayer) {
+      if (pos === 'K') {
+        const existingK = userAnalysis.weakestByPos['K'];
+        if (existingK) {
+          netDelta = Number((fa.projected_pts - existingK.projected_pts).toFixed(1));
+          suggestedDrop = {
+            type: 'KICKER_SWAP',
+            player: existingK,
+            text: `Streamer Swap: Drop ${existingK.full_name} (K)`,
+            delta: netDelta
+          };
+        } else {
+          netDelta = fa.projected_pts;
+          suggestedDrop = {
+            type: 'OPEN_SPOT',
+            player: null,
+            text: 'Starting Kicker Slot (No Drop Needed)',
+            delta: netDelta
+          };
+          isFreeAdd = true;
+        }
+      } else if (pos === 'DEF' && userAnalysis.weakestByPos['DEF']) {
+        const existingDef = userAnalysis.weakestByPos['DEF'];
+        netDelta = Number((fa.projected_pts - existingDef.projected_pts).toFixed(1));
+        suggestedDrop = {
+          type: 'DEF_SWAP',
+          player: existingDef,
+          text: `Streamer Swap: Drop ${existingDef.full_name} (DEF)`,
+          delta: netDelta
+        };
+      } else if (userAnalysis.hasOpenIrMove && userAnalysis.irEligiblePlayer) {
         // Free Add by moving injured player to IR
         suggestedDrop = {
           type: 'IR_MOVE',

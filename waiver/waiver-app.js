@@ -377,9 +377,12 @@ class WaiverApp {
 
     // Dimension B: Filter by Position (ALL / QB / RB / WR / TE / FLEX / K / DEF)
     const pos = this.state.selectedPosition;
-    if (pos === 'FLEX') {
+    if (pos === 'ALL') {
+      // Hide kickers from the main ALL view so they never clutter skill assets or break the model
+      list = list.filter(p => p.position !== 'K');
+    } else if (pos === 'FLEX') {
       list = list.filter(p => ['RB', 'WR', 'TE'].includes(p.position));
-    } else if (pos && pos !== 'ALL') {
+    } else if (pos) {
       list = list.filter(p => p.position === pos);
     }
 
