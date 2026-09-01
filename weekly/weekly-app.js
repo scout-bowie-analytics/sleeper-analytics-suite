@@ -2375,152 +2375,122 @@ class WeeklyOptimizerController {
       const avatarUrl = player.avatar || 'https://sleepercdn.com/images/v2/icons/player_default.webp';
 
       const isPreviewingThisSlot = !isOpponent && this.state.activeSwapPreview && this.state.activeSwapPreview.slotIdx === slotIdx;
-      const previewCandidateId = isPreviewingThisSlot ? this.state.activeSwapPreview.candidateId : null;
+      const candidate = isPreviewingThisSlot ? this.state.activeSwapPreview.candidate : null;
+      const candDist = candidate ? calculatePlayerDistributions(candidate) : null;
+      const candCleanName = candidate ? getCleanPlayerName(candidate.full_name) : '';
+      const candAvatar = candidate ? (candidate.avatar || 'https://sleepercdn.com/images/v2/icons/player_default.webp') : null;
 
+      let playerCellHtml = '';
+      let rangeCellHtml = '';
+      let alertCellHtml = '';
       let actionCellHtml = '';
-      if (isOpponent) {
-        actionCellHtml = `
-          <td class="col-swap col-action" onclick="event.stopPropagation();">
-            <span class="badge-status healthy" style="background:rgba(56,189,248,0.12);border-color:rgba(56,189,248,0.3);color:#38bdf8;font-size:10px;padding:4px 8px;font-weight:700;letter-spacing:0.02em;">OPP STARTER</span>
-          </td>
-        `;
-      } else {
-        // Find all eligible bench players for this specific slot
-        const eligibleBench = (this.state.userBench || []).filter(b => 
-          isPlayerEligibleForSlot(b.position, slotType)
-        );
 
-        let dropdownOptions = `
-          <option value="${player.player_id}" ${!isPreviewingThisSlot ? 'selected' : ''}>
-            ✓ Active: ${cleanName} (${player.position} | ${dist.mean} pts)
-          </option>
-        `;
-
-        if (eligibleBench.length > 0) {
-          dropdownOptions += eligibleBench.map(b => {
-            const bDist = calculatePlayerDistributions(b);
-            const bCleanName = getCleanPlayerName(b.full_name);
-            const isSelected = isPreviewingThisSlot && previewCandidateId === b.player_id;
-            return `<option value="${b.player_id}" ${isSelected ? 'selected' : ''}>➔ Swap: ${bCleanName} (${b.position} - ${b.team} | ${bDist.mean} pts)</option>`;
-          }).join('');
-        } else {
-          dropdownOptions += `<option disabled>(No eligible bench players)</option>`;
-        }
-
-        actionCellHtml = `
-          <td class="col-swap col-action" onclick="event.stopPropagation();">
-            <select class="select-input starter-swap-select" style="padding:5px 8px;font-size:11.5px;width:100%;cursor:pointer;border-color:${isPreviewingThisSlot ? 'var(--accent)' : 'var(--border)'};" onchange="window.onStarterDropdownChange(${slotIdx}, this.value)">
-              ${dropdownOptions}
-            </select>
-          </td>
-        `;
-      }
-
-      let previewRowHtml = '';
-      if (isPreviewingThisSlot && this.state.activeSwapPreview.candidate) {
-        const candidate = this.state.activeSwapPreview.candidate;
-        const candDist = calculatePlayerDistributions(candidate);
-        const candCleanName = getCleanPlayerName(candidate.full_name);
-        const candAvatar = candidate.avatar || 'https://sleepercdn.com/images/v2/icons/player_default.webp';
-
+      if (isPreviewingThisSlot && candidate && candDist) {
         const projDelta = Number((candDist.mean - dist.mean).toFixed(1));
         const floorDelta = Number((candDist.floor10 - dist.floor10).toFixed(1));
         const ceilDelta = Number((candDist.ceiling90 - dist.ceiling90).toFixed(1));
 
-        const projDeltaClass = projDelta > 0.5 ? 'pos' : projDelta < -0.5 ? 'neg' : 'neu';
-        const floorDeltaClass = floorDelta > 0.5 ? 'pos' : floorDelta < -0.5 ? 'neg' : 'neu';
-        const ceilDeltaClass = ceilDelta > 0.5 ? 'pos' : ceilDelta < -0.5 ? 'neg' : 'neu';
-
-        const projDeltaPrefix = projDelta > 0 ? '+' : '';
-        const floorDeltaPrefix = floorDelta > 0 ? '+' : '';
-        const ceilDeltaPrefix = ceilDelta > 0 ? '+' : '';
-
-        previewRowHtml = `
-          <tr class="swap-preview-row">
-            <td colspan="6" style="padding:0;border:none;">
-              <div class="swap-preview-card">
-                <div class="swap-preview-header">
-                  <span class="swap-preview-badge">⚡ Lineup Swap Comparison</span>
-                  <span class="swap-preview-slot">${displaySlot} SLOT</span>
-                </div>
-                
-                <div class="swap-preview-grid">
-                  <!-- Current Starter -->
-                  <div class="swap-compare-player current">
-                    <div class="swap-tag">Current Starter</div>
-                    <div class="swap-p-info">
-                      <img src="${avatarUrl}" class="swap-p-avatar" alt="${cleanName}" onerror="this.src='https://sleepercdn.com/images/v2/icons/player_default.webp'">
-                      <div>
-                        <div class="swap-p-name">${cleanName} <span class="swap-p-team">${player.team || 'FA'}</span></div>
-                        <div style="font-size:10.5px;color:var(--muted);">${player.position} &bull; ${player.opponent || 'OPP'}</div>
-                      </div>
-                    </div>
-                    <div class="swap-p-metrics">
-                      <div class="metric"><span class="m-lbl">Floor:</span> <span class="m-val">${dist.floor10.toFixed(1)}</span></div>
-                      <div class="metric"><span class="m-lbl">Exp:</span> <span class="m-val highlight">${dist.mean.toFixed(1)} pts</span></div>
-                      <div class="metric"><span class="m-lbl">Ceil:</span> <span class="m-val">${dist.ceiling90.toFixed(1)}</span></div>
-                    </div>
-                  </div>
-
-                  <!-- Swap Arrow / Delta -->
-                  <div class="swap-compare-delta">
-                    <div class="delta-arrow">➔</div>
-                    <div class="delta-pills">
-                      <div class="delta-pill ${projDeltaClass}">${projDeltaPrefix}${projDelta} pts Exp</div>
-                      <div class="delta-pill ${floorDeltaClass}">${floorDeltaPrefix}${floorDelta} pts Floor</div>
-                      <div class="delta-pill ${ceilDeltaClass}">${ceilDeltaPrefix}${ceilDelta} pts Ceil</div>
-                    </div>
-                  </div>
-
-                  <!-- Candidate Player -->
-                  <div class="swap-compare-player candidate">
-                    <div class="swap-tag new">Proposed Swap</div>
-                    <div class="swap-p-info">
-                      <img src="${candAvatar}" class="swap-p-avatar" alt="${candCleanName}" onerror="this.src='https://sleepercdn.com/images/v2/icons/player_default.webp'">
-                      <div>
-                        <div class="swap-p-name">${candCleanName} <span class="swap-p-team">${candidate.team || 'FA'}</span></div>
-                        <div style="font-size:10.5px;color:var(--muted);">${candidate.position} &bull; ${candidate.opponent || 'OPP'}</div>
-                      </div>
-                    </div>
-                    <div class="swap-p-metrics">
-                      <div class="metric"><span class="m-lbl">Floor:</span> <span class="m-val">${candDist.floor10.toFixed(1)}</span></div>
-                      <div class="metric"><span class="m-lbl">Exp:</span> <span class="m-val highlight" style="color:var(--accent);">${candDist.mean.toFixed(1)} pts</span></div>
-                      <div class="metric"><span class="m-lbl">Ceil:</span> <span class="m-val">${candDist.ceiling90.toFixed(1)}</span></div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="swap-preview-actions">
-                  <button class="btn-cancel-swap" onclick="window.onCancelSwapPreview(${slotIdx})">✕ Cancel</button>
-                  <button class="btn-confirm-swap" onclick="window.onConfirmSwap(${slotIdx}, '${candidate.player_id}')">✔️ Confirm Swap</button>
-                </div>
+        playerCellHtml = `
+          <div style="display:flex;align-items:center;gap:8px;width:100%;">
+            <div style="position:relative;width:34px;height:34px;flex-shrink:0;">
+              <img src="${candAvatar}" class="player-thumb" style="width:34px;height:34px;border:1.5px solid var(--accent);" alt="${candCleanName}">
+              <img src="${avatarUrl}" style="position:absolute;bottom:-3px;right:-3px;width:16px;height:16px;border-radius:50%;border:1px solid #0f172a;opacity:0.85;" title="Replacing ${cleanName}">
+            </div>
+            <div style="min-width:0;flex:1;">
+              <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+                <span style="font-weight:800;color:var(--accent);">${candCleanName}</span>
+                <span style="font-size:10px;color:var(--muted);text-decoration:line-through;">${cleanName}</span>
               </div>
-            </td>
-          </tr>
+              <div style="font-size:11px;color:#94a3b8;">${candidate.position} - ${candidate.team || 'FA'} &bull; vs ${candidate.opponent || 'OPP'}</div>
+            </div>
+          </div>
         `;
+
+        rangeCellHtml = `
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            ${renderProjectionRangeBar(candDist)}
+            <div class="preview-delta-bar">
+              <span style="color:${floorDelta >= 0 ? '#34d399' : '#f43f5e'};font-weight:700;">Floor: ${floorDelta >= 0 ? '+' : ''}${floorDelta.toFixed(1)}</span>
+              <span style="color:${projDelta >= 0 ? '#34d399' : '#f43f5e'};font-weight:800;">Exp: ${projDelta >= 0 ? '+' : ''}${projDelta.toFixed(1)}</span>
+              <span style="color:${ceilDelta >= 0 ? '#34d399' : '#f43f5e'};font-weight:700;">Ceil: ${ceilDelta >= 0 ? '+' : ''}${ceilDelta.toFixed(1)}</span>
+            </div>
+          </div>
+        `;
+
+        alertCellHtml = `<span class="badge-preview-tag" style="background:rgba(79,209,165,0.18);border:1px solid rgba(79,209,165,0.4);color:var(--accent);font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap;">PREVIEWING</span>`;
+
+        actionCellHtml = `
+          <td class="col-swap col-action" onclick="event.stopPropagation();">
+            <div style="display:flex;align-items:center;gap:6px;width:100%;">
+              <button class="btn-ghost-cancel" onclick="window.onCancelSwapPreview(${slotIdx})" title="Cancel swap preview">✕ Cancel</button>
+              <button class="btn-ghost-confirm" onclick="window.onConfirmSwap(${slotIdx}, '${candidate.player_id}')" title="Confirm lineup swap">✔️ Confirm</button>
+            </div>
+          </td>
+        `;
+      } else {
+        playerCellHtml = `
+          <div style="display:flex;align-items:center;gap:8px;width:100%;">
+            <img src="${avatarUrl}" class="player-thumb" alt="${cleanName}" onerror="this.src='https://sleepercdn.com/images/v2/icons/player_default.webp'">
+            <div style="min-width:0;flex:1;">
+              <div style="font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cleanName}</div>
+              <div>${sched.html}</div>
+            </div>
+          </div>
+        `;
+
+        rangeCellHtml = rangeBarHtml;
+        alertCellHtml = alertBadge;
+
+        if (isOpponent) {
+          actionCellHtml = `
+            <td class="col-swap col-action" onclick="event.stopPropagation();">
+              <span class="badge-status healthy" style="background:rgba(56,189,248,0.12);border-color:rgba(56,189,248,0.3);color:#38bdf8;font-size:10px;padding:4px 8px;font-weight:700;letter-spacing:0.02em;">OPP STARTER</span>
+            </td>
+          `;
+        } else {
+          // Find all eligible bench players for this specific slot
+          const eligibleBench = (this.state.userBench || []).filter(b => 
+            isPlayerEligibleForSlot(b.position, slotType)
+          );
+
+          let dropdownOptions = `
+            <option value="${player.player_id}" selected>
+              ✓ Active: ${cleanName} (${player.position} | ${dist.mean} pts)
+            </option>
+          `;
+
+          if (eligibleBench.length > 0) {
+            dropdownOptions += eligibleBench.map(b => {
+              const bDist = calculatePlayerDistributions(b);
+              const bCleanName = getCleanPlayerName(b.full_name);
+              return `<option value="${b.player_id}">➔ Swap: ${bCleanName} (${b.position} - ${b.team} | ${bDist.mean} pts)</option>`;
+            }).join('');
+          } else {
+            dropdownOptions += `<option disabled>(No eligible bench players)</option>`;
+          }
+
+          actionCellHtml = `
+            <td class="col-swap col-action" onclick="event.stopPropagation();">
+              <select class="select-input starter-swap-select" style="padding:5px 8px;font-size:11.5px;width:100%;cursor:pointer;" onchange="window.onStarterDropdownChange(${slotIdx}, this.value)">
+                ${dropdownOptions}
+              </select>
+            </td>
+          `;
+        }
       }
 
       return `
-        <tr class="suggest-row player-row ${isPreviewingThisSlot ? 'active-preview-row' : ''}" onclick="openPlayerDrawer('${player.player_id}')">
+        <tr class="suggest-row player-row ${isPreviewingThisSlot ? 'ghost-preview-row' : ''}" onclick="openPlayerDrawer('${(candidate && isPreviewingThisSlot) ? candidate.player_id : player.player_id}')">
           <td class="col-slot"><span class="pos-tag ${posClass}">${displaySlot}</span></td>
-          <td class="col-player">
-            <div style="display:flex;align-items:center;gap:8px;width:100%;">
-              <img src="${avatarUrl}" class="player-thumb" alt="${cleanName}" onerror="this.src='https://sleepercdn.com/images/v2/icons/player_default.webp'">
-              <div style="min-width:0;flex:1;">
-                <div style="font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${cleanName}</div>
-                <div>${sched.html}</div>
-              </div>
-            </div>
-          </td>
+          <td class="col-player">${playerCellHtml}</td>
           <td class="col-status">${statusBadge}</td>
-          <td class="col-range">${rangeBarHtml}</td>
-          <td class="col-scout-alert col-alert">${alertBadge}</td>
+          <td class="col-range">${rangeCellHtml}</td>
+          <td class="col-scout-alert col-alert">${alertCellHtml}</td>
           ${actionCellHtml}
         </tr>
-        ${previewRowHtml}
       `;
     }).join('');
+  }
   }
 
   /**
