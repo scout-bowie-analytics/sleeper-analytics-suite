@@ -306,6 +306,25 @@ export class SleeperApiClient {
   }
 
   /**
+   * Fetch real-time trending added or dropped players across all Sleeper leagues
+   * @param {'add'|'drop'} type 'add' or 'drop'
+   * @param {number} lookbackHours 24 or 48 hours
+   * @param {number} limit Maximum players to return (default 50)
+   */
+  async getTrendingPlayers(type = 'add', lookbackHours = 24, limit = 50) {
+    try {
+      const response = await fetch(`${SLEEPER_BASE_URL}/players/nfl/trending/${type}?lookback_hours=${lookbackHours}&limit=${limit}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) return data;
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch trending ${type} players:`, e);
+    }
+    return [];
+  }
+
+  /**
    * Fetch weekly player projections / stats from Sleeper API and compute customized points
    */
   async getProjections(season = '2024', week = 1, scoringSettings = null) {

@@ -232,21 +232,38 @@ class WaiverApp {
     }
     this.state.allPlayersMap = allPlayers;
 
-    // 2. Fetch Weekly Projections Map
-    const weekProjections = await this.api.getProjections('2024', 1, this.state.currentLeague ? this.state.currentLeague.scoring_settings : null);
+    // 2. Fetch Weekly Projections & Real-Time Trending Players in Parallel
+    const [weekProjections, trendingAdds, trendingDrops] = await Promise.all([
+      this.api.getProjections(this.state.currentLeague?.season || '2024', 1, this.state.currentLeague ? this.state.currentLeague.scoring_settings : null),
+      this.api.getTrendingPlayers('add', 24, 100),
+      this.api.getTrendingPlayers('drop', 24, 100)
+    ]);
 
-    // 3. User Roster Analysis
+    const trendingAddsMap = {};
+    (trendingAdds || []).forEach(t => {
+      if (t && t.player_id) trendingAddsMap[String(t.player_id)] = Number(t.count) || 0;
+    });
+
+    const trendingDropsMap = {};
+    (trendingDrops || []).forEach(t => {
+      if (t && t.player_id) trendingDropsMap[String(t.player_id)] = Number(t.count) || 0;
+    });
+
+    // 3. User Roster Analysis (with drop trends)
     this.state.userAnalysis = this.engine.analyzeUserRoster(
       this.state.userRoster,
       this.state.allPlayersMap,
-      weekProjections
+      weekProjections,
+      trendingDropsMap
     );
 
-    // 4. Extract Free Agent Pool
+    // 4. Extract Free Agent Pool (with trending adds & drops)
     const freeAgents = this.engine.extractFreeAgents(
       this.state.allPlayersMap,
       this.state.rosters,
-      weekProjections
+      weekProjections,
+      trendingAddsMap,
+      trendingDropsMap
     );
 
     // 5. Process Net Deltas, FAAB Bids, and Streaming Matrix
@@ -265,12 +282,15 @@ class WaiverApp {
     // Scout Bowie Contextual Reaction
     const irLock = this.state.userAnalysis && this.state.userAnalysis.hasIrLockWarning;
     const nextManUp = this.state.processedTargets.find(p => p.isNextManUp && p.inheritance);
+    const topTrend = this.state.processedTargets.find(p => p.trend && p.trend.type === 'UP' && p.trend.count >= 100000);
     const tipEl = document.getElementById('bowieRadarTip');
     if (tipEl) {
       if (irLock) {
         tipEl.innerHTML = `<strong style="color:#f59e0b;">⚠️ ROSTER LOCK WARNING:</strong> <span style="color:#fde68a;">${this.state.userAnalysis.lockedPlayer.full_name}</span> is now listed as <strong>${this.state.userAnalysis.lockedPlayer.currentStatus}</strong> in your IR slot! Remove them before submitting waiver claims or Sleeper will block your moves. 🐾`;
       } else if (nextManUp) {
         tipEl.innerHTML = `<strong>🚨 NEXT MAN UP ALERT:</strong> <span style="color:#fca5a5;">${nextManUp.full_name} (${nextManUp.position})</span> has inherited ${nextManUp.inheritance.roleDesc}! Bumping projection to ${nextManUp.projected_pts} pts and scaling FAAB bid to Must-Add. 🐾`;
+      } else if (topTrend) {
+        tipEl.innerHTML = `<strong>📈 MARKET VELOCITY:</strong> <span style="color:#4ade80;">${topTrend.full_name}</span> is exploding across Sleeper with <strong style="color:#86efac;">${topTrend.trend.formatted} adds</strong> in the last 24h! 🐾`;
       } else {
         tipEl.textContent = `"Scanning available free agents against your bench. Prioritizing positive net projection upgrades, streaming matchups, and high-contingent handcuffs." 🐾`;
       }
@@ -300,7 +320,7 @@ class WaiverApp {
   }
 
   onFilterCategory(filter) {
-    if (['upgrade', 'streamer', 'handcuff', 'ir_stash'].includes(filter)) {
+    if (['upgrade', 'trending', 'streamer', 'handcuff', 'ir_stash'].includes(filter)) {
       this.onToggleStrategy(filter);
     } else {
       this.onFilterPosition(filter === 'all' ? 'ALL' : filter);
@@ -345,6 +365,8 @@ class WaiverApp {
     const strat = this.state.selectedStrategy;
     if (strat === 'upgrade') {
       list = list.filter(p => p.netDelta > 0 && !p.isIrStash);
+    } else if (strat === 'trending') {
+      list = list.filter(p => (p.trending_adds && p.trending_adds >= 5000) || p.trend?.type === 'UP');
     } else if (strat === 'streamer') {
       list = list.filter(p => p.streamingScore >= 75 && !p.isIrStash);
     } else if (strat === 'handcuff') {
@@ -374,7 +396,9 @@ class WaiverApp {
 
     // Dimension D: Sort Order
     const s = this.state.currentSort;
-    if (s === 'delta_desc') {
+    if (s === 'trending_adds_desc') {
+      list.sort((a, b) => (b.trending_adds || 0) - (a.trending_adds || 0));
+    } else if (s === 'delta_desc') {
       list.sort((a, b) => b.netDelta - a.netDelta);
     } else if (s === 'proj_desc') {
       list.sort((a, b) => (b.projected_pts || b.return_baseline_pts || 0) - (a.projected_pts || a.return_baseline_pts || 0));
@@ -422,7 +446,12 @@ class WaiverApp {
 
       const deltaClass = item.netDelta > 0 ? 'net-delta-positive' : 'net-delta-neutral';
       const deltaPrefix = item.netDelta > 0 ? `+${item.netDelta}` : `${item.netDelta}`;
-      const dropPlayerText = item.suggestedDrop ? item.suggestedDrop.text : 'Drop Bench Asset';
+      
+      // Check if suggested drop candidate has high drops
+      let dropPlayerText = item.suggestedDrop ? item.suggestedDrop.text : 'Drop Bench Asset';
+      if (item.suggestedDrop?.player?.trend && item.suggestedDrop.player.trend.type === 'DOWN') {
+        dropPlayerText += ` <span class="ticker-pill ticker-down" style="font-size:9.5px;padding:0.5px 5px;" title="${item.suggestedDrop.player.trend.count.toLocaleString()} Sleeper drops in last 24h">${item.suggestedDrop.player.trend.formatted}</span>`;
+      }
 
       let projDisplayHtml = `<span style="color:var(--text);font-weight:700;">${item.projected_pts} pts proj</span>`;
       if (item.isNextManUp && item.inheritance) {
@@ -431,14 +460,20 @@ class WaiverApp {
         projDisplayHtml = `<span style="color:#c084fc;font-weight:800;">0.0 pts (Week 1)</span> <span style="font-size:10.5px;color:#d8b4fe;font-weight:600;" title="Projected scoring baseline upon return from IR/PUP">(⏳ ~${item.return_baseline_pts} pts Post-Return)</span>`;
       }
 
+      // Stock Ticker Badge for Active Player
+      const tickerBadgeHtml = item.trend
+        ? `<span class="ticker-pill ${item.trend.type === 'UP' ? 'ticker-up' : 'ticker-down'}" title="${item.trend.type === 'UP' ? '+' : '-'}${item.trend.count.toLocaleString()} Sleeper ${item.trend.type === 'UP' ? 'adds' : 'drops'} (24h)">${item.trend.formatted}</span>`
+        : '';
+
       return `
         <div class="waiver-card ${item.isGoldenBone ? 'golden-bone-card' : ''} ${item.isNextManUp ? 'next-man-up-card' : ''}">
           <!-- Col 1: Player Profile -->
           <div class="waiver-player-profile">
             <img src="${avatarUrl}" class="waiver-avatar-img" alt="${item.full_name}" onerror="this.onerror=null; this.src='https://sleepercdn.com/images/v2/icons/player_default.webp';">
             <div class="waiver-player-info">
-              <div class="waiver-player-name">
+              <div class="waiver-player-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                 <span>${item.full_name || item.name || 'Free Agent'}</span>
+                ${tickerBadgeHtml}
               </div>
               <div class="waiver-player-meta">
                 <span class="pos-tag ${posClass}">${item.position}</span>

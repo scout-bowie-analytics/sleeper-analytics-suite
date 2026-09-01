@@ -87,9 +87,23 @@ export class WaiverEngine {
   }
 
   /**
+   * Helper to format large trending counts into compact ticker strings (e.g. 520560 -> 520.6k)
+   */
+  formatTrendingCount(count) {
+    if (!count || count <= 0) return '0';
+    if (count >= 1000000) {
+      return `${(count / 1000000).toFixed(1)}M`;
+    }
+    if (count >= 1000) {
+      return `${(count / 1000).toFixed(1)}k`;
+    }
+    return `${count}`;
+  }
+
+  /**
    * Extract unowned free agents from master player pool and league rosters
    */
-  extractFreeAgents(allPlayersMap, rosters = [], weekProjections = {}) {
+  extractFreeAgents(allPlayersMap, rosters = [], weekProjections = {}, trendingAddsMap = {}, trendingDropsMap = {}) {
     if (!allPlayersMap || typeof allPlayersMap !== 'object') return [];
 
     // Step 1: Compute Real-Time Role Inheritances ("Next Man Up")
@@ -154,8 +168,26 @@ export class WaiverEngine {
 
           const returnBaseline = isIrStash ? Number((player.projected_pts || player.projected_points || 11.5).toFixed(1)) : 0;
 
+          // Real-Time Stock Ticker Adds / Drops
+          const addCount = Number(trendingAddsMap[pid] ?? player.trending_adds ?? 0);
+          const dropCount = Number(trendingDropsMap[pid] ?? player.trending_drops ?? 0);
+          let trend = null;
+          if (addCount >= 1000) {
+            trend = {
+              type: 'UP',
+              count: addCount,
+              formatted: `▲ +${this.formatTrendingCount(addCount)}`
+            };
+          } else if (dropCount >= 1000) {
+            trend = {
+              type: 'DOWN',
+              count: dropCount,
+              formatted: `▼ -${this.formatTrendingCount(dropCount)}`
+            };
+          }
+
           // Exclude players not on an NFL team, and non-stash inactive noise
-          if (hasNflTeam && (!isSidelined || isIrStash) && (finalProj >= this.options.minProjectionThreshold || contingentScore >= 65 || pos === 'DEF' || inheritance || isIrStash)) {
+          if (hasNflTeam && (!isSidelined || isIrStash) && (finalProj >= this.options.minProjectionThreshold || contingentScore >= 65 || pos === 'DEF' || inheritance || isIrStash || addCount >= 10000)) {
             freeAgents.push({
               ...player,
               player_id: pid,
@@ -166,6 +198,9 @@ export class WaiverEngine {
               isNextManUp: inheritance !== null,
               isIrStash: Boolean(isIrStash),
               return_baseline_pts: returnBaseline,
+              trending_adds: addCount,
+              trending_drops: dropCount,
+              trend,
               is_free_agent: true
             });
           }
@@ -179,7 +214,7 @@ export class WaiverEngine {
   /**
    * Analyze user's current roster to identify starters, bench depth, cut candidates, and IR lock risks
    */
-  analyzeUserRoster(userRoster, allPlayersMap = {}, weekProjections = {}) {
+  analyzeUserRoster(userRoster, allPlayersMap = {}, weekProjections = {}, trendingDropsMap = {}) {
     if (!userRoster || !Array.isArray(userRoster.players)) {
       return {
         starters: [],
@@ -242,6 +277,16 @@ export class WaiverEngine {
           : (Number(player.projected_pts) || 0);
       }
 
+      const dropCount = Number(trendingDropsMap[pid] ?? player.trending_drops ?? 0);
+      let trend = null;
+      if (dropCount >= 1000) {
+        trend = {
+          type: 'DOWN',
+          count: dropCount,
+          formatted: `▼ -${this.formatTrendingCount(dropCount)}`
+        };
+      }
+
       const decorated = {
         ...player,
         player_id: pid,
@@ -249,7 +294,9 @@ export class WaiverEngine {
         isStarter: starterIds.has(pid),
         isBench: !starterIds.has(pid),
         hasNflTeam,
-        isSidelined
+        isSidelined,
+        trending_drops: dropCount,
+        trend
       };
 
       if (starterIds.has(pid)) {

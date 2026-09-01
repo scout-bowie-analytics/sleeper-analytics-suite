@@ -703,6 +703,7 @@ export const MOCK_FREE_AGENTS_DB = {
     opponent: "@ LAR",
     projected_pts: 4.8,
     projected_points: 4.8,
+    trending_adds: 520560,
     status: "Active",
     avatar: "https://sleepercdn.com/content/nfl/players/thumb/8212.jpg"
   },
@@ -717,6 +718,7 @@ export const MOCK_FREE_AGENTS_DB = {
     opponent: "@ NO",
     projected_pts: 13.5,
     projected_points: 13.5,
+    trending_adds: 82978,
     injury_status: "PUP",
     status: "Inactive",
     avatar: "https://sleepercdn.com/content/nfl/players/thumb/11566.jpg"
@@ -732,6 +734,7 @@ export const MOCK_FREE_AGENTS_DB = {
     opponent: "@ NYG",
     projected_pts: 12.2,
     projected_points: 12.2,
+    trending_adds: 75642,
     injury_status: "PUP",
     status: "Inactive",
     avatar: "https://sleepercdn.com/content/nfl/players/thumb/5844.jpg"
@@ -746,6 +749,7 @@ export const MOCK_FREE_AGENTS_DB = {
     opponent: "vs ARI",
     projected_pts: 12.8,
     projected_points: 12.8,
+    trending_adds: 132912,
     status: "Active",
     avatar: "https://sleepercdn.com/content/nfl/players/thumb/8138.jpg"
   },
@@ -759,6 +763,7 @@ export const MOCK_FREE_AGENTS_DB = {
     opponent: "@ BUF",
     projected_pts: 8.6,
     projected_points: 8.6,
+    trending_adds: 267048,
     status: "Active",
     avatar: "https://sleepercdn.com/content/nfl/players/thumb/11560.jpg"
   },

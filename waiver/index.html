@@ -129,6 +129,7 @@
       <!-- Strategy Toggles -->
       <div class="filter-pills-group" id="strategyPillsGroup">
         <button class="filter-pill" data-strategy="upgrade" onclick="onToggleStrategy('upgrade')">⚡ Top Upgrades</button>
+        <button class="filter-pill" data-strategy="trending" onclick="onToggleStrategy('trending')">📈 Trending Adds</button>
         <button class="filter-pill" data-strategy="streamer" onclick="onToggleStrategy('streamer')">🛡️ Streamers</button>
         <button class="filter-pill" data-strategy="handcuff" onclick="onToggleStrategy('handcuff')">🔥 High-Upside Handcuffs</button>
         <button class="filter-pill" data-strategy="ir_stash" onclick="onToggleStrategy('ir_stash')">⏳ IR Return Watch</button>
@@ -151,6 +152,7 @@
       <div class="toolbar-actions">
         <input type="text" id="waiverSearch" class="waiver-search-input" placeholder="Search player/team..." oninput="onSearchInput()">
         <select id="waiverSort" class="waiver-sort-select" onchange="onSortChanged()">
+          <option value="trending_adds_desc">Sort: Trending Adds (Fastest Rising 🚀)</option>
           <option value="delta_desc">Sort: Net Upgrade (High to Low)</option>
           <option value="proj_desc">Sort: Projected Points</option>
           <option value="faab_desc">Sort: FAAB Priority</option>
