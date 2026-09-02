@@ -471,7 +471,7 @@ export class WormChartEngine {
     const height = Math.max(160, Math.floor((rect.height || 220) - 40)); // Reserve 40px for top status strip
     const padTop = 16;
     const padBottom = 26;
-    const padLeft = 45;
+    const padLeft = 65;
     const padRight = 75;
     const chartW = width - padLeft - padRight;
     const chartH = height - padTop - padBottom;
@@ -577,12 +577,18 @@ export class WormChartEngine {
     const diff = Number((activePoint.raw.userScore - activePoint.raw.opponentScore).toFixed(1));
     const signDiff = diff >= 0 ? `+${diff}` : `${diff}`;
     
-    // Spacious Callout Badge Positioning
-    const userLabel = (this.userTeamName || 'Your Team').substring(0, 12);
-    const oppLabel = (this.oppTeamName || 'Opponent').substring(0, 12);
-    const tagW = 112;
-    const tagH = 36;
-    const tagX = Math.min(Math.max(padLeft + 6, activePoint.x + 10), width - padRight - tagW);
+    // Spacious Dynamic Callout Badge Positioning
+    const userLabel = this.userTeamName || 'Your Team';
+    const oppLabel = this.oppTeamName || 'Opponent';
+    const maxNameLen = Math.max(userLabel.length, oppLabel.length);
+    const tagW = Math.max(145, Math.min(220, 80 + maxNameLen * 7.5));
+    const tagH = 38;
+    
+    let tagX = activePoint.x + 14;
+    if (tagX + tagW > width - padRight + 10) {
+      tagX = activePoint.x - tagW - 14;
+    }
+    tagX = Math.max(padLeft + 6, Math.min(width - padRight - tagW, tagX));
     const tagY = Math.max(padTop + 20, Math.min(height - padBottom - 20, activePoint.y));
 
     container.innerHTML = `
@@ -634,10 +640,10 @@ export class WormChartEngine {
 
             <!-- 75% and 25% Gridlines -->
             <line x1="${padLeft}" y1="${getY(75)}" x2="${width - padRight}" y2="${getY(75)}" stroke="rgba(52, 211, 153, 0.08)" stroke-width="1" />
-            <text x="${padLeft - 6}" y="${getY(75) + 3}" fill="#34d399" font-size="9" font-family="monospace" text-anchor="end" opacity="0.6">75%</text>
+            <text x="${padLeft - 10}" y="${getY(75) + 3}" fill="#34d399" font-size="9" font-family="monospace" text-anchor="end" opacity="0.6">75%</text>
 
             <line x1="${padLeft}" y1="${getY(25)}" x2="${width - padRight}" y2="${getY(25)}" stroke="rgba(192, 132, 252, 0.08)" stroke-width="1" />
-            <text x="${padLeft - 6}" y="${getY(25) + 3}" fill="#c084fc" font-size="9" font-family="monospace" text-anchor="end" opacity="0.6">25%</text>
+            <text x="${padLeft - 10}" y="${getY(25) + 3}" fill="#c084fc" font-size="9" font-family="monospace" text-anchor="end" opacity="0.6">25%</text>
 
             <!-- Two-Tone Fills -->
             <path d="${upperAreaD}" fill="url(#userAreaGrad)" clip-path="url(#upperHalfClip)" />
@@ -649,16 +655,19 @@ export class WormChartEngine {
             <!-- Static Pinned Milestone Dots -->
             ${swingPinsHtml}
 
-            <!-- Active Point Win % Callout Tag (Directly pinned with high-contrast badge) -->
+            <!-- Active Point Win % Callout Tag (Directly pinned with dynamic auto-sizing badge) -->
             <g transform="translate(${tagX}, ${tagY})">
-              <rect x="0" y="-18" width="${tagW}" height="${tagH}" rx="6" fill="rgba(15, 23, 42, 0.94)" stroke="rgba(255,255,255,0.18)" stroke-width="1.2" />
-              <circle cx="9" cy="-6" r="3" fill="#34d399" />
-              <text x="17" y="-3" fill="#34d399" font-size="10.5" font-weight="800" font-family="monospace">${activePoint.winPct}%</text>
-              <text x="56" y="-3" fill="#e2e8f0" font-size="8.5" font-weight="700">${userLabel}</text>
+              <rect x="0" y="-19" width="${tagW}" height="${tagH}" rx="6" fill="rgba(15, 23, 42, 0.95)" stroke="rgba(255,255,255,0.2)" stroke-width="1.2" />
               
-              <circle cx="9" cy="8" r="3" fill="#c084fc" />
-              <text x="17" y="11" fill="#c084fc" font-size="10.5" font-weight="800" font-family="monospace">${activePoint.oppWinPct}%</text>
-              <text x="56" y="11" fill="#e2e8f0" font-size="8.5" font-weight="700">${oppLabel}</text>
+              <!-- User Team Line -->
+              <circle cx="10" cy="-7" r="3" fill="#34d399" />
+              <text x="18" y="-3.5" fill="#34d399" font-size="10.5" font-weight="800" font-family="monospace">${activePoint.winPct}%</text>
+              <text x="58" y="-3.5" fill="#e2e8f0" font-size="8.5" font-weight="700">${userLabel}</text>
+              
+              <!-- Opponent Team Line -->
+              <circle cx="10" cy="8" r="3" fill="#c084fc" />
+              <text x="18" y="11.5" fill="#c084fc" font-size="10.5" font-weight="800" font-family="monospace">${activePoint.oppWinPct}%</text>
+              <text x="58" y="11.5" fill="#e2e8f0" font-size="8.5" font-weight="700">${oppLabel}</text>
             </g>
 
             <!-- Time Ticks -->
