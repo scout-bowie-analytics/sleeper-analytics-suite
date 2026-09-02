@@ -2363,6 +2363,11 @@ class WeeklyOptimizerController {
     const startersBody = document.getElementById('startersTableBody');
     if (!startersBody) return;
 
+    if (!isOpponent) {
+      optimalSolution = optimalSolution || this.state.optimalSolution;
+      dossier = dossier || this.state.bowieDossier;
+    }
+
     if (!starters || starters.length === 0) {
       startersBody.innerHTML = `<tr><td colspan="6" class="empty-state">No starting players found on this roster.</td></tr>`;
       return;
@@ -2521,7 +2526,7 @@ class WeeklyOptimizerController {
     if (currentStarter.player_id === newPlayerId) {
       // User selected active starter again -> cancel preview
       this.state.activeSwapPreview = null;
-      this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.dossier, false);
+      this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.bowieDossier, false);
       return;
     }
 
@@ -2534,7 +2539,7 @@ class WeeklyOptimizerController {
     if (!isPlayerEligibleForSlot(newBenchPlayer.position, slotType)) {
       alert(`${newBenchPlayer.full_name} (${newBenchPlayer.position}) is not eligible for the ${slotType} slot.`);
       this.state.activeSwapPreview = null;
-      this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.dossier, false);
+      this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.bowieDossier, false);
       return;
     }
 
@@ -2546,7 +2551,7 @@ class WeeklyOptimizerController {
       candidateId: newPlayerId
     };
 
-    this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.dossier, false);
+    this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.bowieDossier, false);
   }
 
   /**
@@ -2586,7 +2591,7 @@ class WeeklyOptimizerController {
    */
   onCancelSwapPreview(slotIdx) {
     this.state.activeSwapPreview = null;
-    this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.dossier, false);
+    this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.bowieDossier, false);
   }
 
   /**
