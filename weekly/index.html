@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="../shared/css/sleeper-theme.css">
   <link rel="stylesheet" href="./styles.css?v=5.9.0">
   <link rel="stylesheet" href="../waiver/styles.css?v=1.0.0">
+  <link rel="stylesheet" href="./worm-drawer.css?v=1.0.0">
 
   <!-- Open Graph & Social Cards -->
   <meta property="og:type" content="website">
@@ -35,6 +36,9 @@
     window.openPlayerDrawer = function(id) { window.weeklyOptimizer && window.weeklyOptimizer.openPlayerDrawer(id); };
     window.openWaiverDrawer = function() { window.weeklyOptimizer && window.weeklyOptimizer.openWaiverDrawer(); };
     window.closeWaiverDrawer = function() { window.weeklyOptimizer && window.weeklyOptimizer.closeWaiverDrawer(); };
+    window.toggleWormDrawer = function() { window.weeklyOptimizer && window.weeklyOptimizer.toggleWormDrawer(); };
+    window.scrubWormTimeline = function(idx) { window.weeklyOptimizer && window.weeklyOptimizer.scrubWormTimeline(idx); };
+    window.toggleWormPlay = function() { window.weeklyOptimizer && window.weeklyOptimizer.toggleWormPlay(); };
     window.onDrawerStrategyToggle = function(s) { window.weeklyOptimizer && window.weeklyOptimizer.onDrawerStrategyToggle(s); };
     window.onDrawerPosFilter = function(p) { window.weeklyOptimizer && window.weeklyOptimizer.onDrawerPosFilter(p); };
     window.onDrawerSearchInput = function() { window.weeklyOptimizer && window.weeklyOptimizer.onDrawerSearchInput(); };
@@ -1404,6 +1408,74 @@
       </a>
     </div>
 
+  </div>
+
+  <!-- Live In-Game Worm Chart Slide-Up Bottom Drawer -->
+  <div id="wormDrawerPanel" class="worm-drawer-panel">
+    <div class="worm-drawer-header">
+      <div class="wd-title-group">
+        <div class="wd-title">
+          <span style="color:#4fd1a5;">📈</span>
+          <span>Matchup Win Probability Swing Chart</span>
+          <span class="golden-bone-badge" style="font-size:9px;padding:1px 5px;">10K SIMS</span>
+        </div>
+      </div>
+
+      <!-- Timeline Scrubber Controls -->
+      <div class="wd-scrubber-container">
+        <button id="wormPlayBtn" class="wd-btn-play" onclick="toggleWormPlay()">▶ Replay</button>
+        <input type="range" id="wormTimelineScrubber" class="wd-scrubber" min="0" max="0" value="0" oninput="scrubWormTimeline(this.value)">
+        <span id="wormScrubberLabel" style="font-size:10.5px;font-family:monospace;color:#38bdf8;white-space:nowrap;font-weight:700;">Live</span>
+      </div>
+
+      <button class="drawer-close" onclick="toggleWormDrawer()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;" title="Close Swing Chart">&times;</button>
+    </div>
+
+    <!-- Chart Body Container -->
+    <div id="wormChartContainer" class="worm-chart-body">
+      <!-- SVG Worm Chart rendered here dynamically by WormChartEngine -->
+    </div>
+  </div>
+
+  <!-- Collapsed Bottom Live Status Bar -->
+  <div id="wormBottomBar" class="worm-bottom-bar" onclick="toggleWormDrawer()" style="cursor:pointer;" title="Click to expand In-Game Win Probability Swing Chart">
+    <div class="wb-left-group">
+      <div class="wb-live-pulse">
+        <span class="wb-live-dot"></span>
+        <span>LIVE</span>
+      </div>
+
+      <div class="wb-score-cluster">
+        <span id="wbUserScore" class="wb-score-num">0.0</span>
+        <span class="wb-divider">vs</span>
+        <span id="wbOppScore" class="wb-score-num">0.0</span>
+        <span id="wbMarginText" class="wb-margin margin-pos">+0.0 pt margin</span>
+      </div>
+
+      <span id="wbTimeBadge" style="font-size:11px;font-family:monospace;color:var(--muted);font-weight:600;">1:00 PM</span>
+    </div>
+
+    <!-- Center Team Win Probability Pills -->
+    <div class="wb-center-group">
+      <div id="wbUserWinPill" class="worm-pill user-pill favored">
+        <span class="team-label">Your Team</span>
+        <span class="pct-val">50.0% WIN</span>
+      </div>
+      <span style="color:rgba(255,255,255,0.2);font-size:11px;">•</span>
+      <div id="wbOppWinPill" class="worm-pill opp-pill trailing">
+        <span class="pct-val">50.0% WIN</span>
+        <span class="team-label">Opponent</span>
+      </div>
+    </div>
+
+    <!-- Right Expand Action Group -->
+    <div class="wb-right-group">
+      <span id="wbSwingAlert" style="font-size:11px;color:#38bdf8;font-weight:600;display:none;">⚡ Live Momentum Active</span>
+      <button class="wb-btn-expand" onclick="event.stopPropagation(); toggleWormDrawer();">
+        <span>📈 Swing Chart</span>
+        <span id="wormDrawerChevron" style="font-size:10px;margin-left:2px;">&#9650;</span>
+      </button>
+    </div>
   </div>
 
   <!-- Guided Feature Tour Engine -->

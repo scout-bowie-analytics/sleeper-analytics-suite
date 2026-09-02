@@ -21,6 +21,7 @@ import {
 import { scoutBowie } from './scout-bowie.js';
 import { fetchLiveVegasOdds, getTeamVegasContext, setOddsApiKey, CONFIG as ODDS_CONFIG } from '../shared/js/vegas-odds.js';
 import { WaiverEngine } from '../waiver/waiver-engine.js';
+import { WormChartEngine } from './worm-chart.js';
 
 /**
  * Strict Positional Eligibility Helper
@@ -233,6 +234,7 @@ class WeeklyOptimizerController {
     };
 
     this.waiverEngine = new WaiverEngine();
+    this.wormEngine = new WormChartEngine();
     this.chartInstance = null;
     this.bowieQuotes = [
       "\"10,000 iterations computed! Keep an eye on our Golden Bone Lock of the Week and watch out for Bowie Bark Warnings.\" 🐾",
@@ -367,6 +369,9 @@ class WeeklyOptimizerController {
     window.importMatchupPayload = (payload) => this.importMatchupPayload(payload);
     window.openWaiverDrawer = () => this.openWaiverDrawer();
     window.closeWaiverDrawer = () => this.closeWaiverDrawer();
+    window.toggleWormDrawer = () => this.toggleWormDrawer();
+    window.scrubWormTimeline = (idx) => this.scrubWormTimeline(idx);
+    window.toggleWormPlay = () => this.toggleWormPlay();
     window.onDrawerStrategyToggle = (strat) => this.onDrawerStrategyToggle(strat);
     window.onDrawerPosFilter = (pos) => this.onDrawerPosFilter(pos);
     window.onDrawerSearchInput = () => this.onDrawerSearchInput();
@@ -581,6 +586,11 @@ class WeeklyOptimizerController {
     this.renderLoadingTables();
     await this.loadMatchupData(this.state.currentLeague, 1, 1);
     this.closeSetupModal();
+
+    if (this.wormEngine) {
+      this.wormEngine.loadDemoTimeline(this.state.userTeamName || 'Skynet 2.0', this.state.oppTeamName || 'The Chosen Wans', 74.3);
+    }
+
     this.showToast('🏆 Loaded Sample Championship (Pre-Kickoff Optimizer View)! 🐾');
 
     // Auto-launch Guided Feature Tour on first-time sample exploration
@@ -1821,6 +1831,17 @@ class WeeklyOptimizerController {
         if (simTitleBadgeEl) simTitleBadgeEl.textContent = `PRE-KICKOFF • WEEK ${week} OPTIMIZER`;
       }
 
+      if (this.wormEngine) {
+        this.wormEngine.userTeamName = userTeamName;
+        this.wormEngine.oppTeamName = oppTeamName;
+        if (this.state.isDemoMode) {
+          this.wormEngine.loadDemoTimeline(userTeamName, oppTeamName, 74.3);
+        } else {
+          this.wormEngine.loadHistory(leagueId, week);
+          this.wormEngine.ensureKickoffBaseline(50, userTeamName, oppTeamName);
+        }
+      }
+
       this.recomputeOptimization();
       this.loadWaiverTargets();
     } catch (err) {
@@ -2029,7 +2050,42 @@ class WeeklyOptimizerController {
 
       this.renderDensityChart(simResults);
       this.runGamedayAlertSweeps();
+
+      // Update In-Game Win Probability Worm Engine
+      if (this.wormEngine) {
+        this.wormEngine.userTeamName = this.state.userTeamName || 'Your Team';
+        this.wormEngine.oppTeamName = this.state.oppTeamName || 'Opponent';
+
+        const userBanked = (this.state.userStarters || []).reduce((acc, p) => acc + (p.points_scored || p.points_banked || p.actual_pts || p.actual_points || 0), 0);
+        const oppBanked = (this.state.oppStarters || []).reduce((acc, p) => acc + (p.points_scored || p.points_banked || p.actual_pts || p.actual_points || 0), 0);
+        const startersList = [...(this.state.userStarters || []), ...(this.state.oppStarters || [])];
+        const hasLiveGames = startersList.some(p => p.is_live || p.isLive || p.gameState === 'IN_PROGRESS' || (p.points_scored || p.points_banked || p.actual_pts || p.actual_points) > 0);
+
+        if (hasLiveGames && !this.state.isDemoMode) {
+          this.wormEngine.recordSnapshot({
+            userScore: userBanked,
+            opponentScore: oppBanked,
+            userWinPct: simResults.winProbability,
+            opponentWinPct: simResults.oppWinProbability
+          });
+        } else {
+          this.wormEngine.render();
+          this.wormEngine.updateBottomBar();
+        }
+      }
     }
+  }
+
+  toggleWormDrawer() {
+    if (this.wormEngine) this.wormEngine.toggleDrawer();
+  }
+
+  scrubWormTimeline(index) {
+    if (this.wormEngine) this.wormEngine.scrubTo(parseInt(index, 10));
+  }
+
+  toggleWormPlay() {
+    if (this.wormEngine) this.wormEngine.togglePlay();
   }
 
   renderScoreboard(simResults) {
