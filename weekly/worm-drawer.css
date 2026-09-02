@@ -54,12 +54,6 @@
   border-radius: 50%;
   background: #ef4444;
   box-shadow: 0 0 8px #ef4444;
-  animation: wbPulse 1.4s infinite alternate;
-}
-
-@keyframes wbPulse {
-  0% { transform: scale(0.85); opacity: 0.7; }
-  100% { transform: scale(1.25); opacity: 1; }
 }
 
 .wb-score-cluster {
@@ -90,13 +84,13 @@
   border-radius: 4px;
 }
 
-.wb-margin.margin-pos {
+.wb-margin.margin-pos, .wss-margin.margin-pos {
   color: #34d399;
   background: rgba(16, 185, 129, 0.15);
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
-.wb-margin.margin-neg {
+.wb-margin.margin-neg, .wss-margin.margin-neg {
   color: #f87171;
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.3);
@@ -192,7 +186,8 @@
   transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   flex-direction: column;
-  padding: 14px 20px;
+  padding: 12px 18px;
+  box-sizing: border-box;
 }
 
 .worm-drawer-panel.active {
@@ -203,7 +198,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -278,97 +273,85 @@
   flex: 1;
   position: relative;
   min-height: 0;
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  padding: 6px 12px;
-}
-
-/* Floating Active Point Tooltip Card */
-.worm-active-card {
-  position: absolute;
-  top: 12px;
-  background: rgba(15, 23, 42, 0.95);
-  border: 1px solid rgba(234, 179, 8, 0.4);
-  border-radius: 8px;
   padding: 8px 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
-  pointer-events: none;
-  min-width: 200px;
-  z-index: 10;
-  transition: left 0.15s ease;
-}
-
-.w-card-header {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 3. Live Momentum Event Strip (Crisp & Docked above chart) */
+.worm-status-strip {
+  display: flex;
   align-items: center;
-  font-size: 11px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding-bottom: 4px;
-  margin-bottom: 4px;
+  gap: 12px;
+  background: rgba(11, 16, 25, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 5px 10px;
+  margin-bottom: 6px;
+  font-size: 11.5px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
 }
 
-.w-card-time {
+.wss-badge {
   font-family: var(--font-mono, monospace);
-  color: #94a3b8;
   font-weight: 700;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
 }
 
-.w-card-win.favored {
-  color: #34d399;
-  font-weight: 800;
-}
-
-.w-card-win.trailing {
-  color: #f87171;
-  font-weight: 800;
-}
-
-.w-score-row {
+.wss-scores {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11.5px;
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
 }
 
-.w-margin-badge {
-  background: rgba(234, 179, 8, 0.15);
-  border: 1px solid rgba(234, 179, 8, 0.35);
-  color: var(--gold, #eab308);
-  font-size: 10px;
-  font-weight: 800;
+.wss-margin {
+  font-size: 10.5px;
+  font-weight: 700;
   padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.wss-prob {
+  font-weight: 800;
+  white-space: nowrap;
+  padding: 2px 6px;
   border-radius: 4px;
+}
+
+.wss-prob.favored {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.wss-prob.trailing {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.wss-event {
+  color: #38bdf8;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   margin-left: auto;
 }
 
-.w-event-row {
-  margin-top: 4px;
-  font-size: 10.5px;
-  color: #38bdf8;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-/* Animations */
-.head-pulse-ring {
-  animation: headPulse 1.5s infinite ease-out;
-  transform-origin: center;
-}
-
-@keyframes headPulse {
-  0% { transform: scale(0.6); opacity: 0.9; }
-  100% { transform: scale(1.5); opacity: 0; }
-}
-
-.swing-dot-pulse {
-  animation: swingPulse 2s infinite ease-in-out;
-}
-
-@keyframes swingPulse {
-  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 2px #fff); }
-  50% { transform: scale(1.3); filter: drop-shadow(0 0 6px #eab308); }
+.worm-svg-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 /* Empty State */
@@ -391,7 +374,7 @@
   }
 
   .wb-center-group {
-    display: none; /* Hide center pill on mobile to prevent squish */
+    display: none;
   }
 
   .worm-drawer-panel {
@@ -406,9 +389,7 @@
     width: 100%;
   }
 
-  .worm-active-card {
-    position: static;
-    margin-top: 6px;
-    width: 100%;
+  .wss-event {
+    display: none;
   }
 }

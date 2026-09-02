@@ -571,26 +571,27 @@ export class WormChartEngine {
       return;
     }
 
-    const width = 1000;
-    const height = 260;
-    const padTop = 25;
-    const padBottom = 30;
-    const padLeft = 50;
-    const padRight = 80;
+    const rect = container.getBoundingClientRect();
+    const width = Math.max(700, Math.floor(rect.width || 960));
+    const height = Math.max(160, Math.floor((rect.height || 220) - 40)); // Reserve 40px for top status strip
+    const padTop = 16;
+    const padBottom = 26;
+    const padLeft = 45;
+    const padRight = 75;
     const chartW = width - padLeft - padRight;
     const chartH = height - padTop - padBottom;
-    const midY = padTop + chartH * 0.5; // 50% Win Probability Line
+    const midY = padTop + chartH * 0.5; // Exact 50% Coin Flip Line
 
     const data = this.history;
     const totalPts = data.length;
 
-    // Coordinate mapping functions
+    // Coordinate mapping
     const getX = (idx) => totalPts === 1 ? padLeft + chartW * 0.5 : padLeft + (idx / (totalPts - 1)) * chartW;
-    const getY = (winPct) => padTop + chartH * (1.0 - winPct / 100.0);
+    const getY = (winPct) => padTop + chartH * (1.0 - Math.max(0.01, Math.min(99.99, winPct)) / 100.0);
 
     const points = data.map((d, i) => ({
-      x: getX(i),
-      y: getY(d.userWinPct),
+      x: Number(getX(i).toFixed(1)),
+      y: Number(getY(d.userWinPct).toFixed(1)),
       winPct: d.userWinPct,
       oppWinPct: d.opponentWinPct,
       raw: d,
@@ -605,139 +606,131 @@ export class WormChartEngine {
       const p2 = points[i + 1];
       const p3 = points[Math.min(points.length - 1, i + 2)];
 
-      const cp1x = p1.x + (p2.x - p0.x) / 6;
-      const cp1y = p1.y + (p2.y - p0.y) / 6;
-      const cp2x = p2.x - (p3.x - p1.x) / 6;
-      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      const cp1x = Number((p1.x + (p2.x - p0.x) / 6).toFixed(1));
+      const cp1y = Number((p1.y + (p2.y - p0.y) / 6).toFixed(1));
+      const cp2x = Number((p2.x - (p3.x - p1.x) / 6).toFixed(1));
+      const cp2y = Number((p2.y - (p3.y - p1.y) / 6).toFixed(1));
 
       linePathD += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
     }
 
+    const firstX = points[0].x;
+    const lastX = points[points.length - 1].x;
+
     // Upper Area Path (User Team > 50% Area)
-    const upperAreaD = `${linePathD} L ${points[points.length - 1].x} ${midY} L ${points[0].x} ${midY} Z`;
+    const upperAreaD = `${linePathD} L ${lastX} ${midY} L ${firstX} ${midY} Z`;
 
     // Lower Area Path (Opponent Team > 50% Area)
-    const lowerAreaD = `${linePathD} L ${points[points.length - 1].x} ${midY} L ${points[0].x} ${midY} Z`;
+    const lowerAreaD = `${linePathD} L ${lastX} ${midY} L ${firstX} ${midY} Z`;
 
     const activeIdx = Math.min(this.currentSnapshotIdx >= 0 ? this.currentSnapshotIdx : points.length - 1, points.length - 1);
     const activePoint = points[activeIdx] || points[points.length - 1];
 
-    // Generate Swing Pins
-    const swingPinsHtml = points.filter(p => p.raw.isSwing || p.idx === 0 || p.idx === points.length - 1).map(p => {
-      const isFavored = p.winPct >= 50;
-      const pinColor = isFavored ? '#4fd1a5' : '#a855f7';
+    // Static Milestone Dots (Strictly pinned to line, zero animation/drift)
+    const swingPinsHtml = points.map(p => {
       const isCurrent = p.idx === activeIdx;
+      const isSwing = p.raw.isSwing;
+      if (!isSwing && !isCurrent && p.idx !== 0 && p.idx !== points.length - 1) return '';
+      
+      const pinColor = p.winPct >= 50 ? '#34d399' : '#c084fc';
       return `
-        <g class="worm-pin ${isCurrent ? 'active' : ''}" onclick="window.scrubWormTimeline(${p.idx})" style="cursor:pointer;">
-          <circle cx="${p.x}" cy="${p.y}" r="${isCurrent ? 7 : 4.5}" fill="${pinColor}" stroke="#0f172a" stroke-width="2" class="${p.raw.isSwing ? 'swing-dot-pulse' : ''}" />
-          ${p.raw.isSwing ? `<circle cx="${p.x}" cy="${p.y}" r="9" fill="none" stroke="${pinColor}" stroke-width="1.5" opacity="0.6" />` : ''}
+        <g class="worm-pin" onclick="window.scrubWormTimeline(${p.idx})" style="cursor:pointer;">
+          <circle cx="${p.x}" cy="${p.y}" r="${isCurrent ? 5.5 : 3.5}" fill="${pinColor}" stroke="#0f172a" stroke-width="1.5" />
+          ${isCurrent ? `<circle cx="${p.x}" cy="${p.y}" r="9" fill="none" stroke="${pinColor}" stroke-width="1.5" opacity="0.6" />` : ''}
         </g>
       `;
     }).join('');
 
     // X-Axis Time Ticks
     const timeTicksHtml = points.filter((p, i) => i === 0 || i === Math.floor(points.length / 2) || i === points.length - 1 || p.raw.quarter?.includes('FINAL') || p.raw.quarter?.includes('Half')).map(p => `
-      <text x="${p.x}" y="${height - 8}" font-size="10.5" fill="#94a3b8" font-family="monospace" text-anchor="${p.idx === 0 ? 'start' : (p.idx === points.length - 1 ? 'end' : 'middle')}" font-weight="700">
+      <text x="${p.x}" y="${height - 6}" font-size="10" fill="#64748b" font-family="monospace" text-anchor="${p.idx === 0 ? 'start' : (p.idx === points.length - 1 ? 'end' : 'middle')}" font-weight="700">
         ${p.raw.timeLabel}
       </text>
     `).join('');
 
-    // Active Live Marker Head
-    const headColor = activePoint.winPct >= 50 ? '#4fd1a5' : '#a855f7';
-    const activeTagY = activePoint.y;
+    const diff = Number((activePoint.raw.userScore - activePoint.raw.opponentScore).toFixed(1));
+    const signDiff = diff >= 0 ? `+${diff}` : `${diff}`;
 
     container.innerHTML = `
-      <div class="worm-chart-wrapper" style="position:relative;width:100%;height:100%;">
-        <svg viewBox="0 0 ${width} ${height}" class="worm-svg-canvas" preserveAspectRatio="none" style="width:100%;height:100%;overflow:visible;">
-          <defs>
-            <!-- User Area Gradient (Above 50%) -->
-            <linearGradient id="userAreaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#4fd1a5" stop-opacity="0.45" />
-              <stop offset="100%" stop-color="#4fd1a5" stop-opacity="0.03" />
-            </linearGradient>
+      <div class="worm-chart-wrapper" style="width:100%;height:100%;display:flex;flex-direction:column;">
+        
+        <!-- Pinned Top Momentum Event Strip -->
+        <div class="worm-status-strip">
+          <span class="wss-badge">${activePoint.raw.quarter ? `${activePoint.raw.quarter} • ` : ''}${activePoint.raw.timeLabel}</span>
+          <span class="wss-scores">
+            <span style="color:#fff;font-weight:700;">${this.userTeamName}: <strong style="color:#34d399;">${activePoint.raw.userScore.toFixed(1)}</strong></span>
+            <span style="color:#64748b;">vs</span>
+            <span style="color:#fff;font-weight:700;">${this.oppTeamName}: <strong style="color:#c084fc;">${activePoint.raw.opponentScore.toFixed(1)}</strong></span>
+            <span class="wss-margin ${diff >= 0 ? 'margin-pos' : 'margin-neg'}">${signDiff} pt lead</span>
+          </span>
+          <span class="wss-prob ${activePoint.winPct >= 50 ? 'favored' : 'trailing'}">
+            ⚡ ${activePoint.winPct}% Win Probability
+          </span>
+          ${activePoint.raw.keyEvent ? `<span class="wss-event">${activePoint.raw.keyEvent}</span>` : ''}
+        </div>
 
-            <!-- Opponent Area Gradient (Below 50%) -->
-            <linearGradient id="oppAreaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#a855f7" stop-opacity="0.03" />
-              <stop offset="100%" stop-color="#a855f7" stop-opacity="0.45" />
-            </linearGradient>
+        <!-- SVG Two-Tone Canvas -->
+        <div style="flex:1;min-height:0;position:relative;">
+          <svg viewBox="0 0 ${width} ${height}" class="worm-svg-canvas" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <!-- User Area Gradient (Above 50%) -->
+              <linearGradient id="userAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#34d399" stop-opacity="0.35" />
+                <stop offset="100%" stop-color="#34d399" stop-opacity="0.02" />
+              </linearGradient>
 
-            <!-- Clip to Upper Half (>= 50%) -->
-            <clipPath id="upperHalfClip">
-              <rect x="0" y="0" width="${width}" height="${midY}" />
-            </clipPath>
+              <!-- Opponent Area Gradient (Below 50%) -->
+              <linearGradient id="oppAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#c084fc" stop-opacity="0.02" />
+                <stop offset="100%" stop-color="#c084fc" stop-opacity="0.35" />
+              </linearGradient>
 
-            <!-- Clip to Lower Half (<= 50%) -->
-            <clipPath id="lowerHalfClip">
-              <rect x="0" y="${midY}" width="${width}" height="${height - midY}" />
-            </clipPath>
+              <!-- Clip to Upper Half (>= 50%) -->
+              <clipPath id="upperHalfClip">
+                <rect x="0" y="0" width="${width}" height="${midY}" />
+              </clipPath>
 
-            <!-- Glow Filter -->
-            <filter id="wormGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3.5" result="blur" />
-              <feComposite in="SourceGraphic" in2="blur" operator="over" />
-            </filter>
-          </defs>
+              <!-- Clip to Lower Half (<= 50%) -->
+              <clipPath id="lowerHalfClip">
+                <rect x="0" y="${midY}" width="${width}" height="${height - midY}" />
+              </clipPath>
+            </defs>
 
-          <!-- 50% Midline (Coin Flip) -->
-          <line x1="${padLeft}" y1="${midY}" x2="${width - padRight}" y2="${midY}" stroke="rgba(255,255,255,0.22)" stroke-dasharray="5 5" stroke-width="1.5" />
-          <text x="${padLeft + 6}" y="${midY - 6}" fill="rgba(255,255,255,0.5)" font-size="9.5" font-family="monospace" font-weight="700">
-            50% COIN FLIP
-          </text>
+            <!-- 50% Midline (Coin Flip) -->
+            <line x1="${padLeft}" y1="${midY}" x2="${width - padRight}" y2="${midY}" stroke="rgba(255,255,255,0.2)" stroke-dasharray="4 4" stroke-width="1.2" />
+            <text x="${padLeft + 6}" y="${midY - 5}" fill="rgba(255,255,255,0.4)" font-size="9" font-family="monospace" font-weight="700">
+              50% COIN FLIP
+            </text>
 
-          <!-- 75% and 25% Subtle Gridlines -->
-          <line x1="${padLeft}" y1="${getY(75)}" x2="${width - padRight}" y2="${getY(75)}" stroke="rgba(79, 209, 165, 0.12)" stroke-width="1" />
-          <text x="${padLeft - 8}" y="${getY(75) + 4}" fill="#4fd1a5" font-size="9" font-family="monospace" text-anchor="end" opacity="0.8">75%</text>
+            <!-- 75% and 25% Gridlines -->
+            <line x1="${padLeft}" y1="${getY(75)}" x2="${width - padRight}" y2="${getY(75)}" stroke="rgba(52, 211, 153, 0.1)" stroke-width="1" />
+            <text x="${padLeft - 6}" y="${getY(75) + 3}" fill="#34d399" font-size="9" font-family="monospace" text-anchor="end" opacity="0.6">75%</text>
 
-          <line x1="${padLeft}" y1="${getY(25)}" x2="${width - padRight}" y2="${getY(25)}" stroke="rgba(168, 85, 247, 0.12)" stroke-width="1" />
-          <text x="${padLeft - 8}" y="${getY(25) + 4}" fill="#a855f7" font-size="9" font-family="monospace" text-anchor="end" opacity="0.8">25%</text>
+            <line x1="${padLeft}" y1="${getY(25)}" x2="${width - padRight}" y2="${getY(25)}" stroke="rgba(192, 132, 252, 0.1)" stroke-width="1" />
+            <text x="${padLeft - 6}" y="${getY(25) + 3}" fill="#c084fc" font-size="9" font-family="monospace" text-anchor="end" opacity="0.6">25%</text>
 
-          <!-- Two-Tone Fills -->
-          <path d="${upperAreaD}" fill="url(#userAreaGrad)" clip-path="url(#upperHalfClip)" />
-          <path d="${lowerAreaD}" fill="url(#oppAreaGrad)" clip-path="url(#lowerHalfClip)" />
+            <!-- Two-Tone Fills -->
+            <path d="${upperAreaD}" fill="url(#userAreaGrad)" clip-path="url(#upperHalfClip)" />
+            <path d="${lowerAreaD}" fill="url(#oppAreaGrad)" clip-path="url(#lowerHalfClip)" />
 
-          <!-- Main Win Probability Curve -->
-          <path d="${linePathD}" fill="none" stroke="#ffffff" stroke-width="2.5" filter="url(#wormGlow)" stroke-linecap="round" stroke-linejoin="round" />
+            <!-- Main Win Probability Curve -->
+            <path d="${linePathD}" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
 
-          <!-- Interactive Swing & Milestone Pins -->
-          ${swingPinsHtml}
+            <!-- Static Pinned Milestone Dots -->
+            ${swingPinsHtml}
 
-          <!-- Active Head Pulse Marker -->
-          <circle cx="${activePoint.x}" cy="${activePoint.y}" r="11" fill="none" stroke="${headColor}" stroke-width="2" class="head-pulse-ring" />
-          <circle cx="${activePoint.x}" cy="${activePoint.y}" r="6" fill="${headColor}" stroke="#ffffff" stroke-width="2" />
+            <!-- Right Edge Win % Readout -->
+            <g transform="translate(${width - padRight + 8}, ${midY})">
+              <text x="0" y="-12" fill="#34d399" font-size="11.5" font-weight="800" font-family="monospace">${activePoint.winPct}%</text>
+              <text x="0" y="-2" fill="#94a3b8" font-size="8" font-weight="700">${this.userTeamName.substring(0, 8)}</text>
+              <line x1="0" y1="4" x2="55" y2="4" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
+              <text x="0" y="16" fill="#c084fc" font-size="11.5" font-weight="800" font-family="monospace">${activePoint.oppWinPct}%</text>
+              <text x="0" y="26" fill="#94a3b8" font-size="8" font-weight="700">${this.oppTeamName.substring(0, 8)}</text>
+            </g>
 
-          <!-- Right Edge Win % Badges -->
-          <g transform="translate(${width - padRight + 12}, ${activePoint.y})">
-            <!-- User Win % Callout -->
-            <rect x="0" y="-22" width="65" height="18" rx="4" fill="rgba(79, 209, 165, 0.2)" stroke="#4fd1a5" stroke-width="1" />
-            <text x="6" y="-10" fill="#4fd1a5" font-size="10.5" font-weight="800" font-family="monospace">${activePoint.winPct}%</text>
-            <text x="6" y="0" fill="#94a3b8" font-size="8" font-weight="700">${this.userTeamName.substring(0, 8)}</text>
-
-            <!-- Opponent Win % Callout -->
-            <rect x="0" y="8" width="65" height="18" rx="4" fill="rgba(168, 85, 247, 0.2)" stroke="#a855f7" stroke-width="1" />
-            <text x="6" y="20" fill="#c084fc" font-size="10.5" font-weight="800" font-family="monospace">${activePoint.oppWinPct}%</text>
-            <text x="6" y="30" fill="#94a3b8" font-size="8" font-weight="700">${this.oppTeamName.substring(0, 8)}</text>
-          </g>
-
-          <!-- Time Ticks -->
-          ${timeTicksHtml}
-        </svg>
-
-        <!-- Floating Scrubber Tooltip on Active Point -->
-        <div class="worm-active-card" style="left:${Math.min(Math.max(10, (activePoint.x / width) * 100 - 15), 70)}%;">
-          <div class="w-card-header">
-            <span class="w-card-time">${activePoint.raw.quarter || ''} • ${activePoint.raw.timeLabel}</span>
-            <span class="w-card-win ${activePoint.winPct >= 50 ? 'favored' : 'trailing'}">${activePoint.winPct}% ${this.userTeamName}</span>
-          </div>
-          <div class="w-card-body">
-            <div class="w-score-row">
-              <span style="color:#fff;font-weight:700;">${this.userTeamName}: <strong>${activePoint.raw.userScore.toFixed(1)}</strong></span>
-              <span style="color:var(--muted);">&bull;</span>
-              <span style="color:#fff;font-weight:700;">${this.oppTeamName}: <strong>${activePoint.raw.opponentScore.toFixed(1)}</strong></span>
-              <span class="w-margin-badge">${activePoint.raw.userScore >= activePoint.raw.opponentScore ? `+${(activePoint.raw.userScore - activePoint.raw.opponentScore).toFixed(1)}` : (activePoint.raw.userScore - activePoint.raw.opponentScore).toFixed(1)}</span>
-            </div>
-            ${activePoint.raw.keyEvent ? `<div class="w-event-row">${activePoint.raw.keyEvent}</div>` : ''}
-          </div>
+            <!-- Time Ticks -->
+            ${timeTicksHtml}
+          </svg>
         </div>
       </div>
     `;
