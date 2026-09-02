@@ -300,94 +300,10 @@ export class WormChartEngine {
         opponentScore: 68.4,
         userWinPct: 79.1,
         opponentWinPct: 20.9,
-        keyEvent: '🏁 1:00 PM Games Go FINAL; 4:25 PM Kickoff',
-        isSwing: false,
-        quarter: '4:25 PM',
-        clock: '15:00'
-      },
-      {
-        timestamp: baseTime + 13800000,
-        timeLabel: '4:50 PM',
-        userScore: 92.5,
-        opponentScore: 78.1,
-        userWinPct: 86.3,
-        opponentWinPct: 13.7,
-        keyEvent: '🎯 Justin Herbert 38yd bullet TD to McConkey',
+        keyEvent: '🏁 1:00 PM Games Final • 4:25 PM Afternoon Window Kicking Off',
         isSwing: true,
-        quarter: '2Q',
-        clock: '5:20'
-      },
-      {
-        timestamp: baseTime + 15600000,
-        timeLabel: '5:20 PM',
-        userScore: 104.2,
-        opponentScore: 91.8,
-        userWinPct: 83.0,
-        opponentWinPct: 17.0,
-        keyEvent: '⚡ Brock Bowers 6 rec for 74 yds (TE Monster)',
-        isSwing: false,
-        quarter: '3Q',
-        clock: '9:40'
-      },
-      {
-        timestamp: baseTime + 17400000,
-        timeLabel: '5:50 PM',
-        userScore: 116.8,
-        opponentScore: 102.5,
-        userWinPct: 88.7,
-        opponentWinPct: 11.3,
-        keyEvent: '🛡️ Baltimore Ravens DEF sack + INT return',
-        isSwing: false,
-        quarter: '4Q',
-        clock: '3:15'
-      },
-      {
-        timestamp: baseTime + 19200000,
-        timeLabel: '6:30 PM',
-        userScore: 122.4,
-        opponentScore: 108.0,
-        userWinPct: 91.5,
-        opponentWinPct: 8.5,
-        keyEvent: '🏁 Afternoon Games Final; Bedrock Lead Built',
-        isSwing: false,
-        quarter: 'FINAL (PM)',
-        clock: '0:00'
-      },
-      {
-        timestamp: baseTime + 21600000,
-        timeLabel: '7:45 PM',
-        userScore: 124.8,
-        opponentScore: 110.2,
-        userWinPct: 93.4,
-        opponentWinPct: 6.6,
-        keyEvent: '⚡ SNF Warmups: Roster leads by +14.6 pts entering Primetime',
-        isSwing: false,
-        quarter: 'PRE-SNF',
+        quarter: '4:20 PM',
         clock: '15:00'
-      },
-      {
-        timestamp: baseTime + 23400000,
-        timeLabel: '8:30 PM',
-        userScore: 127.58,
-        opponentScore: 112.15,
-        userWinPct: 96.8,
-        opponentWinPct: 3.2,
-        keyEvent: '🐾 Sunday Night Football: Malik Nabers active in FLEX',
-        isSwing: true,
-        quarter: 'SNF 3Q',
-        clock: '8:45'
-      },
-      {
-        timestamp: baseTime + 27000000,
-        timeLabel: '10:45 PM',
-        userScore: 127.58,
-        opponentScore: 112.15,
-        userWinPct: 98.9,
-        opponentWinPct: 1.1,
-        keyEvent: '🏆 4Q Clock Bleed: 98.9% Win Probability Sealed!',
-        isSwing: false,
-        quarter: 'FINAL',
-        clock: '0:00'
       }
     ];
 
