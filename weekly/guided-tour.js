@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 🐾 Scout Bowie Guided Feature Tour Engine
  * Zero-dependency, lightweight interactive walkthrough for the Weekly Lineup Optimizer.
  */
@@ -18,7 +18,7 @@ class ScoutBowieTour {
     this.resizeHandler = this.reposition.bind(this);
     this.keydownHandler = this.handleKeydown.bind(this);
 
-    // 8 Core Tour Steps
+    // 10 Core Tour Steps
     this.steps = [
       {
         target: '.mascot-header-card, .scout-banner',
@@ -63,10 +63,31 @@ class ScoutBowieTour {
         placement: 'top'
       },
       {
-        target: '#densityChartCard, .chart-box, #densityChart',
-        title: '📊 10k Monte Carlo Density Curves',
-        text: 'Scroll down to visualize full probability curves for both rosters! Inspect where your distribution overlaps your opponent’s, view median peak outcomes, and hover for target score win odds.',
-        placement: 'top'
+        target: '#btnOpenWaiverDrawer, .btn-waiver-radar',
+        title: '📡 Waiver Wire Radar & FAAB Lab',
+        text: 'Click Waiver Radar to discover top free agents with positive net projected points over your starters! Includes recommended FAAB bid tiers and 1-click clipboard claim export.',
+        placement: 'bottom',
+        onEnter: () => {
+          if (window.closeWaiverDrawer) window.closeWaiverDrawer();
+        }
+      },
+      {
+        target: '#analyticsChartCard, #chartModeSelect',
+        title: '📊 10K Monte Carlo Density Curves',
+        text: 'Visualize full probability distributions for both rosters! Inspect where your curve overlaps your opponent’s, view median peak outcomes, and hover for target score win odds.',
+        placement: 'top',
+        onEnter: () => {
+          if (window.onChartModeChange) window.onChartModeChange('density');
+        }
+      },
+      {
+        target: '#analyticsChartCard, #wormChartBox, #wormHeaderControls',
+        title: '📈 In-Game Win Probability Swing Chart',
+        text: 'Select the Swing Chart from the dropdown to track live matchup momentum! Visualizes key scoring plays, touchdown swings, and features interactive timeline replay scrubbing.',
+        placement: 'top',
+        onEnter: () => {
+          if (window.onChartModeChange) window.onChartModeChange('worm');
+        }
       }
     ];
   }
@@ -138,6 +159,11 @@ class ScoutBowieTour {
 
     this.currentStepIndex = index;
     const step = this.steps[index];
+
+    // Trigger step enter lifecycle action if present
+    if (step.onEnter && typeof step.onEnter === 'function') {
+      try { step.onEnter(); } catch(e) { console.warn('Tour onEnter error:', e); }
+    }
 
     // Locate target DOM element
     let targetEl = null;

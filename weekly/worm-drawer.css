@@ -320,30 +320,58 @@
   padding: 24px;
 }
 
-/* Mobile Responsiveness */
+/* Mobile Responsiveness & Touch Ergonomics */
 @media (max-width: 768px) {
-  .worm-bottom-bar {
-    height: 52px;
-    padding: 0 10px;
-  }
-
-  .wb-center-group {
-    display: none;
-  }
-
-  .worm-drawer-panel {
-    height: 380px;
-    bottom: 52px;
-    padding: 10px;
-  }
-
-  .wd-scrubber-container {
-    max-width: 100%;
-    order: 3;
+  .chart-selector-wrapper {
     width: 100%;
   }
 
+  .chart-selector-wrapper select {
+    width: 100% !important;
+    font-size: 12px !important;
+    padding: 6px 28px 6px 10px !important;
+  }
+
+  .wd-scrubber-container {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin-top: 4px;
+    justify-content: space-between;
+  }
+
+  .worm-chart-body {
+    height: 220px !important;
+    padding: 6px 8px !important;
+  }
+
+  .worm-status-strip {
+    font-size: 10.5px !important;
+    padding: 4px 6px !important;
+    gap: 6px !important;
+  }
+
   .wss-event {
-    display: none;
+    display: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .tour-popover-card {
+    width: calc(100vw - 20px) !important;
+    left: 10px !important;
+    padding: 14px 14px !important;
+  }
+
+  .tour-step-title {
+    font-size: 0.95rem !important;
+  }
+
+  .tour-step-desc {
+    font-size: 0.78rem !important;
+  }
+
+  .tour-btn {
+    padding: 5px 10px !important;
+    font-size: 0.75rem !important;
   }
 }
