@@ -607,7 +607,6 @@ export class WormChartEngine {
         
         <!-- Pinned Top Momentum Event Strip -->
         <div class="worm-status-strip">
-          <span class="wss-badge">${activePoint.raw.quarter ? `${activePoint.raw.quarter} • ` : ''}${activePoint.raw.timeLabel}</span>
           <span class="wss-scores">
             <span style="color:#fff;font-weight:700;">${this.userTeamName}: <strong style="color:#34d399;">${activePoint.raw.userScore.toFixed(1)}</strong></span>
             <span style="color:#64748b;">vs</span>
