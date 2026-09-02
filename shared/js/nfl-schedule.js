@@ -218,7 +218,8 @@ export async function fetchLiveNflSchedule(season = '2026', week = 1, seasonType
 
           const venue = comp.venue || {};
           const isVenueIndoor = venue.indoor === true || DOME_TEAMS.has(homeTeam);
-          const stadiumName = venue.fullName || STADIUM_DIRECTORY[homeTeam]?.name || `${homeTeam} Stadium`;
+          const rawStadiumName = venue.fullName || STADIUM_DIRECTORY[homeTeam]?.name || `${homeTeam} Stadium`;
+          const stadiumName = rawStadiumName.replace(/\s*\(Old\)/gi, '').trim();
           const stadiumCity = venue.address ? `${venue.address.city}, ${venue.address.state || ''}` : STADIUM_DIRECTORY[homeTeam]?.city || '';
 
           let day = 'Sun';
