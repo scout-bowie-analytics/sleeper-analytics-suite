@@ -6,6 +6,7 @@
   <title>Waiver Wire Radar & FAAB Optimizer | Scout Bowie HQ</title>
   <link rel="icon" type="image/webp" href="../assets/scout-bowie.webp">
   <link rel="stylesheet" href="../shared/css/sleeper-theme.css">
+  <link rel="stylesheet" href="../shared/css/docs-modal.css">
   <link rel="stylesheet" href="./styles.css">
 
   <!-- Open Graph & Social Cards -->
@@ -30,6 +31,9 @@
       <span style="color:var(--text);font-weight:600;">Waiver Wire Radar</span>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
+      <button class="btn-docs-modal" onclick="openDocsModal('waiver')" title="View Quantitative Methodology & Documentation">
+        <span>📖 Methodology & Docs</span>
+      </button>
       <a href="../index.html" style="color:var(--muted);text-decoration:none;padding:3px 8px;border-radius:4px;border:1px solid var(--border);transition:all 0.15s;">◄ Portal Home</a>
       <a href="../draft/index.html" style="color:var(--accent);text-decoration:none;padding:3px 8px;border-radius:4px;border:1px solid var(--accent);background:rgba(79,209,165,0.08);transition:all 0.15s;">Draft War Room ➔</a>
       <a href="../weekly/index.html" style="color:#fbbf24;text-decoration:none;padding:3px 8px;border-radius:4px;border:1px solid #fbbf24;background:rgba(251,191,36,0.08);transition:all 0.15s;">Weekly Optimizer ➔</a>
@@ -186,6 +190,7 @@
   </div>
 
   <!-- Application Logic Module -->
+  <script type="module" src="../shared/js/docs-modal.js"></script>
   <script type="module" src="./waiver-app.js?v=1.0.0"></script>
 </body>
 </html>

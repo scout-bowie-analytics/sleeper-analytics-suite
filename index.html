@@ -6,6 +6,7 @@
   <title>Sleeper Analytics Suite | Scout Bowie HQ</title>
   <link rel="icon" type="image/webp" href="assets/scout-bowie.webp">
   <link rel="stylesheet" href="shared/css/sleeper-theme.css">
+  <link rel="stylesheet" href="shared/css/docs-modal.css">
   <link rel="stylesheet" href="style.css">
 
   <!-- Open Graph & Social Cards -->
@@ -374,10 +375,15 @@
     <header class="portal-header">
       <div class="brand-group">
         <h1 class="brand-title">Sleeper Analytics Suite</h1>
-        <span class="brand-tag">v2.5</span>
+        <span class="brand-tag">v2.5 PRO</span>
       </div>
-      <div class="live-indicator">
-        <span class="pulse-dot"></span> <span>SLEEPER API CONNECTED</span>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <button id="btnOpenDocsModal" class="btn-docs-modal" onclick="openDocsModal()" title="View Quantitative Methodology & Documentation">
+          <span>📖 Methodology & Docs</span>
+        </button>
+        <div class="live-indicator">
+          <span class="pulse-dot"></span> <span>SLEEPER API CONNECTED</span>
+        </div>
       </div>
     </header>
 
@@ -529,5 +535,6 @@
       }
     }
   </script>
+  <script type="module" src="shared/js/docs-modal.js"></script>
 </body>
 </html>

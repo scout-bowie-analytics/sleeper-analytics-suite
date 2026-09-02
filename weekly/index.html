@@ -6,6 +6,7 @@
   <title>Weekly Lineup Optimizer | Sleeper Analytics Suite</title>
   <link rel="icon" type="image/webp" href="../assets/scout-bowie.webp">
   <link rel="stylesheet" href="../shared/css/sleeper-theme.css">
+  <link rel="stylesheet" href="../shared/css/docs-modal.css">
   <link rel="stylesheet" href="./styles.css?v=5.9.0">
   <link rel="stylesheet" href="../waiver/styles.css?v=1.0.0">
   <link rel="stylesheet" href="./worm-drawer.css?v=1.0.0">
@@ -764,6 +765,9 @@
       <span style="color:var(--text);font-weight:600;">Weekly Lineup Optimizer</span>
     </div>
     <div style="display:flex;align-items:center;gap:12px;">
+      <button class="btn-docs-modal" onclick="openDocsModal()" title="View Quantitative Methodology & Documentation">
+        <span>📖 Methodology & Docs</span>
+      </button>
       <button id="btn-gameday-alerts" data-nav="navAlertBtn" onclick="openAlertsModal()" style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.35);color:var(--gold);padding:3px 9px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all 0.15s;" title="Scout Bowie Gameday Alerts & Settings">
         <span>🔔 Gameday Alerts</span>
         <span id="navAlertBadgeCount" class="alert-count-badge" style="display:none;font-size:9px;padding:0 4px;min-width:14px;height:14px;">0</span>
@@ -1437,6 +1441,8 @@
 
   <!-- Guided Feature Tour Engine -->
   <script src="./guided-tour.js?v=5.9.0"></script>
+  <!-- Quantitative Methodology & Docs Modal -->
+  <script type="module" src="../shared/js/docs-modal.js"></script>
   <!-- Weekly Lineup App Logic (with cache-busting) -->
   <script type="module" src="./weekly-app.js?v=5.9.0"></script>
 </body>
