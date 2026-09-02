@@ -449,41 +449,7 @@ export class WormChartEngine {
     if (typeof document === 'undefined') return;
     const bar = document.getElementById(this.bottomBarId);
     if (!bar) return;
-
-    const snapshot = this.history[this.currentSnapshotIdx] || this.history[this.history.length - 1];
-    if (!snapshot) {
-      bar.style.display = 'none';
-      return;
-    }
-
-    bar.style.display = 'flex';
-
-    const uWinPillEl = document.getElementById('wbUserWinPill');
-    const oWinPillEl = document.getElementById('wbOppWinPill');
-    const timeBadgeEl = document.getElementById('wbTimeBadge');
-    const swingAlertEl = document.getElementById('wbSwingAlert');
-
-    const uWin = snapshot.userWinPct.toFixed(1);
-    const oWin = snapshot.opponentWinPct.toFixed(1);
-
-    if (uWinPillEl) {
-      uWinPillEl.innerHTML = `<span class="team-label">${this.userTeamName.substring(0, 12)}</span> <span class="pct-val">${uWin}% WIN</span>`;
-      uWinPillEl.className = `worm-pill user-pill ${snapshot.userWinPct >= 50 ? 'favored' : 'trailing'}`;
-    }
-
-    if (oWinPillEl) {
-      oWinPillEl.innerHTML = `<span class="pct-val">${oWin}% WIN</span> <span class="team-label">${this.oppTeamName.substring(0, 12)}</span>`;
-      oWinPillEl.className = `worm-pill opp-pill ${snapshot.opponentWinPct >= 50 ? 'favored' : 'trailing'}`;
-    }
-
-    if (timeBadgeEl) {
-      timeBadgeEl.textContent = snapshot.quarter ? `${snapshot.quarter} • ${snapshot.timeLabel}` : snapshot.timeLabel;
-    }
-
-    if (swingAlertEl && snapshot.keyEvent) {
-      swingAlertEl.textContent = snapshot.keyEvent;
-      swingAlertEl.style.display = 'inline-flex';
-    }
+    bar.style.display = (this.history && this.history.length > 0) ? 'flex' : 'none';
   }
 
   /**
@@ -730,16 +696,10 @@ export class WormChartEngine {
   renderScrubberControls() {
     if (typeof document === 'undefined') return;
     const scrubber = document.getElementById('wormTimelineScrubber');
-    const label = document.getElementById('wormScrubberLabel');
     if (!scrubber) return;
 
     scrubber.min = 0;
     scrubber.max = Math.max(0, this.history.length - 1);
     scrubber.value = this.currentSnapshotIdx >= 0 ? this.currentSnapshotIdx : this.history.length - 1;
-
-    const current = this.history[scrubber.value];
-    if (label && current) {
-      label.textContent = `${current.quarter || ''} ${current.timeLabel} • ${current.userScore.toFixed(1)} - ${current.opponentScore.toFixed(1)} (${current.userWinPct}% Win)`;
-    }
   }
 }

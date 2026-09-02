@@ -1425,7 +1425,6 @@
       <div class="wd-scrubber-container">
         <button id="wormPlayBtn" class="wd-btn-play" onclick="toggleWormPlay()">▶ Replay</button>
         <input type="range" id="wormTimelineScrubber" class="wd-scrubber" min="0" max="0" value="0" oninput="scrubWormTimeline(this.value)">
-        <span id="wormScrubberLabel" style="font-size:10.5px;font-family:monospace;color:#38bdf8;white-space:nowrap;font-weight:700;">Live</span>
       </div>
 
       <button class="drawer-close" onclick="toggleWormDrawer()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;" title="Close Swing Chart">&times;</button>
@@ -1437,33 +1436,12 @@
     </div>
   </div>
 
-  <!-- Collapsed Bottom Live Status Bar -->
-  <div id="wormBottomBar" class="worm-bottom-bar" onclick="toggleWormDrawer()" style="cursor:pointer;" title="Click to expand In-Game Win Probability Swing Chart">
-    <div class="wb-left-group">
-      <span id="wbTimeBadge" style="font-size:11.5px;font-family:monospace;color:#94a3b8;font-weight:700;background:rgba(255,255,255,0.06);padding:3px 8px;border-radius:5px;">1:00 PM</span>
-    </div>
-
-    <!-- Center Team Win Probability Pills -->
-    <div class="wb-center-group">
-      <div id="wbUserWinPill" class="worm-pill user-pill favored">
-        <span class="team-label">Your Team</span>
-        <span class="pct-val">50.0% WIN</span>
-      </div>
-      <span style="color:rgba(255,255,255,0.2);font-size:11px;">•</span>
-      <div id="wbOppWinPill" class="worm-pill opp-pill trailing">
-        <span class="pct-val">50.0% WIN</span>
-        <span class="team-label">Opponent</span>
-      </div>
-    </div>
-
-    <!-- Right Expand Action Group -->
-    <div class="wb-right-group">
-      <span id="wbSwingAlert" style="font-size:11px;color:#38bdf8;font-weight:600;display:none;">⚡ Live Momentum Active</span>
-      <button class="wb-btn-expand" onclick="event.stopPropagation(); toggleWormDrawer();">
-        <span>📈 Swing Chart</span>
-        <span id="wormDrawerChevron" style="font-size:10px;margin-left:2px;">&#9650;</span>
-      </button>
-    </div>
+  <!-- Collapsed Bottom Bar Toggle -->
+  <div id="wormBottomBar" class="worm-bottom-bar" onclick="toggleWormDrawer()" style="cursor:pointer;" title="Click to toggle In-Game Win Probability Swing Chart">
+    <button class="wb-btn-expand" onclick="event.stopPropagation(); toggleWormDrawer();">
+      <span>📈 Matchup Win Probability Swing Chart</span>
+      <span id="wormDrawerChevron" style="font-size:10px;margin-left:4px;">&#9650;</span>
+    </button>
   </div>
 
   <!-- Guided Feature Tour Engine -->
