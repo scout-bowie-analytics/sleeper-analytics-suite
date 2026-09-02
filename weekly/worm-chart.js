@@ -186,11 +186,11 @@ export class WormChartEngine {
   }
 
   /**
-   * Generate Full 16-Point Interactive Demo Gameday Timeline
+   * Generate Interactive Demo Gameday Timeline (Mid-Matchup 4:20 PM State)
    */
-  loadDemoTimeline(userTeam = 'Skynet 2.0', oppTeam = 'The Chosen Wans', baseWinProb = 74.3) {
-    this.userTeamName = userTeam;
-    this.oppTeamName = oppTeam;
+  loadDemoTimeline(userTeam = 'Quantum Blitz', oppTeam = 'Apex Predators', baseWinProb = 79.1) {
+    this.userTeamName = userTeam || 'Quantum Blitz';
+    this.oppTeamName = oppTeam || 'Apex Predators';
     this.leagueId = 'demo_championship_league_2025';
     this.week = 1;
 
@@ -216,7 +216,7 @@ export class WormChartEngine {
         opponentScore: 2.3,
         userWinPct: 69.8,
         opponentWinPct: 30.2,
-        keyEvent: '⚡ Saquon Barkley 24yd rush + 2 rec',
+        keyEvent: '⚡ Christian McCaffrey 18yd rush + 2 rec',
         isSwing: true,
         quarter: '1Q',
         clock: '6:45'
@@ -228,7 +228,7 @@ export class WormChartEngine {
         opponentScore: 11.2,
         userWinPct: 64.2,
         opponentWinPct: 35.8,
-        keyEvent: '⚠️ Opponent Kyren Williams 4yd TD plunge',
+        keyEvent: '⚠️ Opponent Saquon Barkley 4yd TD plunge',
         isSwing: false,
         quarter: '1Q',
         clock: '0:30'
@@ -240,7 +240,7 @@ export class WormChartEngine {
         opponentScore: 16.4,
         userWinPct: 78.5,
         opponentWinPct: 21.5,
-        keyEvent: '🚀 Saquon Barkley 42yd TD breakaway!',
+        keyEvent: '🚀 Christian McCaffrey 42yd TD breakaway!',
         isSwing: true,
         quarter: '2Q',
         clock: '8:15'
@@ -252,7 +252,7 @@ export class WormChartEngine {
         opponentScore: 31.0,
         userWinPct: 68.1,
         opponentWinPct: 31.9,
-        keyEvent: '⚡ Christian Watson 18yd grab; Opponent TD answer',
+        keyEvent: '⚡ Sam LaPorta 18yd TD grab; Opponent TD answer',
         isSwing: true,
         quarter: '2Q',
         clock: '0:00 (Half)'
@@ -264,7 +264,7 @@ export class WormChartEngine {
         opponentScore: 49.5,
         userWinPct: 48.6,
         opponentWinPct: 51.4,
-        keyEvent: '🚨 MOMENTUM FLIP: Opponent Amon-Ra St. Brown 2TD explosion',
+        keyEvent: '🚨 MOMENTUM FLIP: Opponent CeeDee Lamb 2TD explosion',
         isSwing: true,
         quarter: '3Q',
         clock: '11:20'
@@ -276,7 +276,7 @@ export class WormChartEngine {
         opponentScore: 58.6,
         userWinPct: 39.2,
         opponentWinPct: 60.8,
-        keyEvent: '⚠️ Opponent FG; User trail by 6.5 pts',
+        keyEvent: '⚠️ Opponent FG; Quantum Blitz trail by 6.5 pts',
         isSwing: true,
         quarter: '3Q',
         clock: '4:10'
@@ -288,7 +288,7 @@ export class WormChartEngine {
         opponentScore: 62.0,
         userWinPct: 72.4,
         opponentWinPct: 27.6,
-        keyEvent: '🔥 Travis Etienne 32yd TD & 2-pt conversion!',
+        keyEvent: '🔥 Amon-Ra St. Brown 32yd TD & 2-pt conversion!',
         isSwing: true,
         quarter: '4Q',
         clock: '8:45'

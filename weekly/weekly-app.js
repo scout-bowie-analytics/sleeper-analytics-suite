@@ -588,7 +588,7 @@ class WeeklyOptimizerController {
     this.closeSetupModal();
 
     if (this.wormEngine) {
-      this.wormEngine.loadDemoTimeline(this.state.userTeamName || 'Skynet 2.0', this.state.oppTeamName || 'The Chosen Wans', 74.3);
+      this.wormEngine.loadDemoTimeline(this.state.userTeamName || 'Quantum Blitz', this.state.oppTeamName || 'Apex Predators', 79.1);
     }
 
     this.showToast('🏆 Loaded Sample Championship (Pre-Kickoff Optimizer View)! 🐾');
