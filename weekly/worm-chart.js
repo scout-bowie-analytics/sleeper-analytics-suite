@@ -163,8 +163,8 @@ export class WormChartEngine {
    * Ensure Initial Kickoff Baseline Exists
    */
   ensureKickoffBaseline(initialWinProb = 50, userTeam = 'Your Team', oppTeam = 'Opponent') {
-    this.userTeamName = userTeam;
-    this.oppTeamName = oppTeam;
+    this.userTeamName = userTeam || 'Your Team';
+    this.oppTeamName = oppTeam || 'Opponent';
 
     if (this.history.length === 0) {
       const kickoffTime = Date.now() - 3600000 * 3; // 3 hours ago
@@ -181,6 +181,10 @@ export class WormChartEngine {
         clock: '15:00'
       });
       this.currentSnapshotIdx = 0;
+      this.saveHistory(this.leagueId, this.week);
+    } else if (this.history.length === 1 && (this.history[0].userScore === 0 && this.history[0].opponentScore === 0)) {
+      this.history[0].userWinPct = Number(initialWinProb.toFixed(1));
+      this.history[0].opponentWinPct = Number((100 - initialWinProb).toFixed(1));
       this.saveHistory(this.leagueId, this.week);
     }
   }
@@ -572,7 +576,14 @@ export class WormChartEngine {
 
     const diff = Number((activePoint.raw.userScore - activePoint.raw.opponentScore).toFixed(1));
     const signDiff = diff >= 0 ? `+${diff}` : `${diff}`;
-    const tagX = Math.min(activePoint.x + 10, width - 70);
+    
+    // Spacious Callout Badge Positioning
+    const userLabel = (this.userTeamName || 'Your Team').substring(0, 12);
+    const oppLabel = (this.oppTeamName || 'Opponent').substring(0, 12);
+    const tagW = 112;
+    const tagH = 36;
+    const tagX = Math.min(Math.max(padLeft + 6, activePoint.x + 10), width - padRight - tagW);
+    const tagY = Math.max(padTop + 20, Math.min(height - padBottom - 20, activePoint.y));
 
     container.innerHTML = `
       <div class="worm-chart-wrapper" style="width:100%;height:100%;display:flex;flex-direction:column;">
@@ -617,7 +628,7 @@ export class WormChartEngine {
 
             <!-- 50% Midline (Coin Flip) -->
             <line x1="${padLeft}" y1="${midY}" x2="${width - padRight}" y2="${midY}" stroke="rgba(255,255,255,0.18)" stroke-dasharray="4 4" stroke-width="1.2" />
-            <text x="${padLeft + 6}" y="${midY - 5}" fill="rgba(255,255,255,0.4)" font-size="9" font-family="monospace" font-weight="700">
+            <text x="${width - padRight - 8}" y="${midY - 5}" fill="rgba(255,255,255,0.35)" font-size="8.5" font-family="monospace" font-weight="700" text-anchor="end">
               50% COIN FLIP
             </text>
 
@@ -638,13 +649,16 @@ export class WormChartEngine {
             <!-- Static Pinned Milestone Dots -->
             ${swingPinsHtml}
 
-            <!-- Active Point Win % Callout Tag (Directly pinned at active head) -->
-            <g transform="translate(${tagX}, ${activePoint.y})">
-              <rect x="-4" y="-14" width="62" height="30" rx="4" fill="rgba(15, 23, 42, 0.85)" stroke="rgba(255,255,255,0.15)" stroke-width="1" />
-              <text x="2" y="-3" fill="#34d399" font-size="10.5" font-weight="800" font-family="monospace">${activePoint.winPct}%</text>
-              <text x="34" y="-3" fill="#94a3b8" font-size="7.5" font-weight="700">${this.userTeamName.substring(0, 4)}</text>
-              <text x="2" y="11" fill="#c084fc" font-size="10.5" font-weight="800" font-family="monospace">${activePoint.oppWinPct}%</text>
-              <text x="34" y="11" fill="#94a3b8" font-size="7.5" font-weight="700">${this.oppTeamName.substring(0, 4)}</text>
+            <!-- Active Point Win % Callout Tag (Directly pinned with high-contrast badge) -->
+            <g transform="translate(${tagX}, ${tagY})">
+              <rect x="0" y="-18" width="${tagW}" height="${tagH}" rx="6" fill="rgba(15, 23, 42, 0.94)" stroke="rgba(255,255,255,0.18)" stroke-width="1.2" />
+              <circle cx="9" cy="-6" r="3" fill="#34d399" />
+              <text x="17" y="-3" fill="#34d399" font-size="10.5" font-weight="800" font-family="monospace">${activePoint.winPct}%</text>
+              <text x="56" y="-3" fill="#e2e8f0" font-size="8.5" font-weight="700">${userLabel}</text>
+              
+              <circle cx="9" cy="8" r="3" fill="#c084fc" />
+              <text x="17" y="11" fill="#c084fc" font-size="10.5" font-weight="800" font-family="monospace">${activePoint.oppWinPct}%</text>
+              <text x="56" y="11" fill="#e2e8f0" font-size="8.5" font-weight="700">${oppLabel}</text>
             </g>
 
             <!-- Time Ticks -->

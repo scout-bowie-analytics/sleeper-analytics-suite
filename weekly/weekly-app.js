@@ -1796,6 +1796,7 @@ class WeeklyOptimizerController {
 
       const userTeamName = userObj ? (userObj.metadata?.team_name || userObj.display_name) : `Team ${userRoster.roster_id}`;
       const oppTeamName = oppObj ? (oppObj.metadata?.team_name || oppObj.display_name) : `Team ${oppRoster.roster_id}`;
+      this.state.userTeamName = userTeamName;
       this.state.oppTeamName = oppTeamName;
 
       if (typeof document !== 'undefined') {
@@ -2060,8 +2061,10 @@ class WeeklyOptimizerController {
 
       // Update In-Game Win Probability Worm Engine
       if (this.wormEngine) {
-        this.wormEngine.userTeamName = this.state.userTeamName || 'Quantum Blitz';
-        this.wormEngine.oppTeamName = this.state.oppTeamName || 'Apex Predators';
+        const defaultUser = this.state.isDemoMode ? 'Quantum Blitz' : 'Your Team';
+        const defaultOpp = this.state.isDemoMode ? 'Apex Predators' : 'Opponent';
+        this.wormEngine.userTeamName = this.state.userTeamName || defaultUser;
+        this.wormEngine.oppTeamName = this.state.oppTeamName || defaultOpp;
 
         const userBanked = (this.state.userStarters || []).reduce((acc, p) => acc + (p.points_scored || p.points_banked || p.actual_pts || p.actual_points || 0), 0);
         const oppBanked = (this.state.oppStarters || []).reduce((acc, p) => acc + (p.points_scored || p.points_banked || p.actual_pts || p.actual_points || 0), 0);
@@ -2075,6 +2078,8 @@ class WeeklyOptimizerController {
             userWinPct: simResults.winProbability,
             opponentWinPct: simResults.oppWinProbability
           });
+        } else if (!this.state.isDemoMode) {
+          this.wormEngine.ensureKickoffBaseline(simResults.winProbability, this.wormEngine.userTeamName, this.wormEngine.oppTeamName);
         }
         
         if (this.state.chartMode === 'worm') {
