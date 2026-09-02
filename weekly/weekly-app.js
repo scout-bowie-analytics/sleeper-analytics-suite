@@ -1837,8 +1837,9 @@ class WeeklyOptimizerController {
       if (this.wormEngine) {
         this.wormEngine.userTeamName = userTeamName;
         this.wormEngine.oppTeamName = oppTeamName;
+        this.wormEngine.setMatchupStarters(this.state.userStarters || [], this.state.oppStarters || []);
         if (this.state.isDemoMode) {
-          this.wormEngine.loadDemoTimeline(userTeamName, oppTeamName, 74.3);
+          this.wormEngine.loadDemoTimeline(userTeamName, oppTeamName, 79.1);
         } else {
           this.wormEngine.loadHistory(leagueId, week);
           this.wormEngine.ensureKickoffBaseline(50, userTeamName, oppTeamName);

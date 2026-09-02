@@ -186,6 +186,29 @@ export class WormChartEngine {
   }
 
   /**
+   * Auto-calibrate Matchup Window Duration based on scheduled kickoff times across both rosters
+   */
+  setMatchupStarters(userStarters = [], oppStarters = []) {
+    const all = [...userStarters, ...oppStarters];
+    let latestHour = 19.5; // default 4:25 PM late afternoon window (ends ~7:30 PM)
+
+    all.forEach(p => {
+      const sched = p.gameSchedule || p.game_status || '';
+      const schedStr = typeof sched === 'string' ? sched : (sched.text || '');
+      if (schedStr.includes('8:20') || schedStr.includes('8:15') || schedStr.includes('SNF') || schedStr.includes('MNF')) {
+        latestHour = Math.max(latestHour, 23.5); // SNF / MNF ends ~11:30 PM (10.5h total)
+      } else if (schedStr.includes('4:25') || schedStr.includes('4:05')) {
+        latestHour = Math.max(latestHour, 19.5); // Late afternoon ends ~7:30 PM (6.5h total)
+      } else if (schedStr.includes('1:00') || schedStr.includes('9:30')) {
+        latestHour = Math.max(latestHour, 16.5); // Early window ends ~4:15 PM (3.5h total)
+      }
+    });
+
+    const hours = Math.max(3.5, latestHour - 13.0);
+    this.matchupDurationMs = hours * 3600 * 1000;
+  }
+
+  /**
    * Generate Interactive Demo Gameday Timeline (Mid-Matchup 4:20 PM State)
    */
   loadDemoTimeline(userTeam = 'Quantum Blitz', oppTeam = 'Apex Predators', baseWinProb = 79.1) {
@@ -193,6 +216,7 @@ export class WormChartEngine {
     this.oppTeamName = oppTeam || 'Apex Predators';
     this.leagueId = 'demo_championship_league_2025';
     this.week = 1;
+    this.matchupDurationMs = 6.5 * 3600 * 1000; // 1:00 PM to 7:30 PM (4:25 PM window)
 
     const baseTime = Date.now() - 28800000; // 8 hours ago
 
@@ -452,15 +476,18 @@ export class WormChartEngine {
     const data = this.history;
     const totalPts = data.length;
 
-    // Fixed full-day domain: 1:00 PM Kickoff to ~11:00 PM Final (10 hours total window)
+    // Option A: Matchup-Adaptive Domain (calculated to matchup's exact final whistle window)
     const tStart = data[0].timestamp;
-    const isFullDayFinal = data.some(d => d.quarter?.includes('FINAL') && d.timeLabel?.includes('10:45'));
-    const totalDurationMs = isFullDayFinal 
+    const isMatchupFinal = data.some(d => d.quarter?.includes('FINAL') || d.isFinal);
+    
+    // Default matchup duration: 6.5 hours (1:00 PM to 7:30 PM for 4:25 PM window), or 10.5 hours for SNF
+    const matchupDurationMs = this.matchupDurationMs || (6.5 * 3600 * 1000);
+    const totalDurationMs = isMatchupFinal 
       ? Math.max(3600000, data[data.length - 1].timestamp - tStart) 
-      : (10 * 3600 * 1000); // 10-hour standard NFL Sunday slate
+      : matchupDurationMs;
     const tEnd = tStart + totalDurationMs;
 
-    // Coordinate mapping (fills dynamically across fixed domain)
+    // Coordinate mapping (fills dynamically across matchup's exact timeline)
     const getX = (timestamp) => {
       const frac = Math.max(0.0, Math.min(1.0, (timestamp - tStart) / (tEnd - tStart)));
       return padLeft + frac * chartW;
@@ -519,13 +546,23 @@ export class WormChartEngine {
       `;
     }).join('');
 
-    // Fixed Full-Slate X-Axis Time Ticks (1:00 PM -> 4:25 PM -> 8:20 PM -> FINAL)
-    const fixedTicks = [
-      { label: '1:00 PM', x: padLeft, anchor: 'start' },
-      { label: '4:25 PM', x: Number((padLeft + chartW * 0.34).toFixed(1)), anchor: 'middle' },
-      { label: '8:20 PM (SNF)', x: Number((padLeft + chartW * 0.73).toFixed(1)), anchor: 'middle' },
-      { label: 'FINAL', x: Number((padLeft + chartW).toFixed(1)), anchor: 'end' }
-    ];
+    // Adaptive X-Axis Time Ticks tailored to matchup duration
+    const fixedTicks = [{ label: '1:00 PM', x: padLeft, anchor: 'start' }];
+    
+    if (totalDurationMs >= 8 * 3600 * 1000) {
+      // SNF / Full Slate
+      fixedTicks.push({ label: '4:25 PM', x: Number((padLeft + chartW * 0.34).toFixed(1)), anchor: 'middle' });
+      fixedTicks.push({ label: '8:20 PM (SNF)', x: Number((padLeft + chartW * 0.73).toFixed(1)), anchor: 'middle' });
+    } else if (totalDurationMs >= 5 * 3600 * 1000) {
+      // Early + Late Afternoon (1:00 PM - 7:30 PM)
+      fixedTicks.push({ label: '2:30 PM (Half)', x: Number((padLeft + chartW * 0.23).toFixed(1)), anchor: 'middle' });
+      fixedTicks.push({ label: '4:25 PM', x: Number((padLeft + chartW * 0.52).toFixed(1)), anchor: 'middle' });
+    } else {
+      // Early Only (1:00 PM - 4:15 PM)
+      fixedTicks.push({ label: '2:30 PM (Half)', x: Number((padLeft + chartW * 0.46).toFixed(1)), anchor: 'middle' });
+    }
+    
+    fixedTicks.push({ label: 'FINAL', x: Number((padLeft + chartW).toFixed(1)), anchor: 'end' });
 
     const timeTicksHtml = fixedTicks.map(t => `
       <text x="${t.x}" y="${height - 6}" font-size="9.5" fill="#64748b" font-family="monospace" text-anchor="${t.anchor}" font-weight="700">
