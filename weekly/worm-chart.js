@@ -452,12 +452,23 @@ export class WormChartEngine {
     const data = this.history;
     const totalPts = data.length;
 
-    // Coordinate mapping
-    const getX = (idx) => totalPts === 1 ? padLeft + chartW * 0.5 : padLeft + (idx / (totalPts - 1)) * chartW;
+    // Fixed full-day domain: 1:00 PM Kickoff to ~11:00 PM Final (10 hours total window)
+    const tStart = data[0].timestamp;
+    const isFullDayFinal = data.some(d => d.quarter?.includes('FINAL') && d.timeLabel?.includes('10:45'));
+    const totalDurationMs = isFullDayFinal 
+      ? Math.max(3600000, data[data.length - 1].timestamp - tStart) 
+      : (10 * 3600 * 1000); // 10-hour standard NFL Sunday slate
+    const tEnd = tStart + totalDurationMs;
+
+    // Coordinate mapping (fills dynamically across fixed domain)
+    const getX = (timestamp) => {
+      const frac = Math.max(0.0, Math.min(1.0, (timestamp - tStart) / (tEnd - tStart)));
+      return padLeft + frac * chartW;
+    };
     const getY = (winPct) => padTop + chartH * (1.0 - Math.max(0.01, Math.min(99.99, winPct)) / 100.0);
 
     const points = data.map((d, i) => ({
-      x: Number(getX(i).toFixed(1)),
+      x: Number(getX(d.timestamp).toFixed(1)),
       y: Number(getY(d.userWinPct).toFixed(1)),
       winPct: d.userWinPct,
       oppWinPct: d.opponentWinPct,
@@ -493,7 +504,7 @@ export class WormChartEngine {
     const activeIdx = Math.min(this.currentSnapshotIdx >= 0 ? this.currentSnapshotIdx : points.length - 1, points.length - 1);
     const activePoint = points[activeIdx] || points[points.length - 1];
 
-    // Static Milestone Dots (Strictly pinned to line, zero animation/drift)
+    // Static Milestone Dots (Strictly pinned to line)
     const swingPinsHtml = points.map(p => {
       const isCurrent = p.idx === activeIdx;
       const isSwing = p.raw.isSwing;
@@ -508,15 +519,23 @@ export class WormChartEngine {
       `;
     }).join('');
 
-    // X-Axis Time Ticks
-    const timeTicksHtml = points.filter((p, i) => i === 0 || i === Math.floor(points.length / 2) || i === points.length - 1 || p.raw.quarter?.includes('FINAL') || p.raw.quarter?.includes('Half')).map(p => `
-      <text x="${p.x}" y="${height - 6}" font-size="10" fill="#64748b" font-family="monospace" text-anchor="${p.idx === 0 ? 'start' : (p.idx === points.length - 1 ? 'end' : 'middle')}" font-weight="700">
-        ${p.raw.timeLabel}
+    // Fixed Full-Slate X-Axis Time Ticks (1:00 PM -> 4:25 PM -> 8:20 PM -> FINAL)
+    const fixedTicks = [
+      { label: '1:00 PM', x: padLeft, anchor: 'start' },
+      { label: '4:25 PM', x: Number((padLeft + chartW * 0.34).toFixed(1)), anchor: 'middle' },
+      { label: '8:20 PM (SNF)', x: Number((padLeft + chartW * 0.73).toFixed(1)), anchor: 'middle' },
+      { label: 'FINAL', x: Number((padLeft + chartW).toFixed(1)), anchor: 'end' }
+    ];
+
+    const timeTicksHtml = fixedTicks.map(t => `
+      <text x="${t.x}" y="${height - 6}" font-size="9.5" fill="#64748b" font-family="monospace" text-anchor="${t.anchor}" font-weight="700">
+        ${t.label}
       </text>
     `).join('');
 
     const diff = Number((activePoint.raw.userScore - activePoint.raw.opponentScore).toFixed(1));
     const signDiff = diff >= 0 ? `+${diff}` : `${diff}`;
+    const tagX = Math.min(activePoint.x + 10, width - 70);
 
     container.innerHTML = `
       <div class="worm-chart-wrapper" style="width:100%;height:100%;display:flex;flex-direction:column;">
@@ -560,16 +579,16 @@ export class WormChartEngine {
             </defs>
 
             <!-- 50% Midline (Coin Flip) -->
-            <line x1="${padLeft}" y1="${midY}" x2="${width - padRight}" y2="${midY}" stroke="rgba(255,255,255,0.2)" stroke-dasharray="4 4" stroke-width="1.2" />
+            <line x1="${padLeft}" y1="${midY}" x2="${width - padRight}" y2="${midY}" stroke="rgba(255,255,255,0.18)" stroke-dasharray="4 4" stroke-width="1.2" />
             <text x="${padLeft + 6}" y="${midY - 5}" fill="rgba(255,255,255,0.4)" font-size="9" font-family="monospace" font-weight="700">
               50% COIN FLIP
             </text>
 
             <!-- 75% and 25% Gridlines -->
-            <line x1="${padLeft}" y1="${getY(75)}" x2="${width - padRight}" y2="${getY(75)}" stroke="rgba(52, 211, 153, 0.1)" stroke-width="1" />
+            <line x1="${padLeft}" y1="${getY(75)}" x2="${width - padRight}" y2="${getY(75)}" stroke="rgba(52, 211, 153, 0.08)" stroke-width="1" />
             <text x="${padLeft - 6}" y="${getY(75) + 3}" fill="#34d399" font-size="9" font-family="monospace" text-anchor="end" opacity="0.6">75%</text>
 
-            <line x1="${padLeft}" y1="${getY(25)}" x2="${width - padRight}" y2="${getY(25)}" stroke="rgba(192, 132, 252, 0.1)" stroke-width="1" />
+            <line x1="${padLeft}" y1="${getY(25)}" x2="${width - padRight}" y2="${getY(25)}" stroke="rgba(192, 132, 252, 0.08)" stroke-width="1" />
             <text x="${padLeft - 6}" y="${getY(25) + 3}" fill="#c084fc" font-size="9" font-family="monospace" text-anchor="end" opacity="0.6">25%</text>
 
             <!-- Two-Tone Fills -->
@@ -582,13 +601,13 @@ export class WormChartEngine {
             <!-- Static Pinned Milestone Dots -->
             ${swingPinsHtml}
 
-            <!-- Right Edge Win % Readout -->
-            <g transform="translate(${width - padRight + 8}, ${midY})">
-              <text x="0" y="-12" fill="#34d399" font-size="11.5" font-weight="800" font-family="monospace">${activePoint.winPct}%</text>
-              <text x="0" y="-2" fill="#94a3b8" font-size="8" font-weight="700">${this.userTeamName.substring(0, 8)}</text>
-              <line x1="0" y1="4" x2="55" y2="4" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
-              <text x="0" y="16" fill="#c084fc" font-size="11.5" font-weight="800" font-family="monospace">${activePoint.oppWinPct}%</text>
-              <text x="0" y="26" fill="#94a3b8" font-size="8" font-weight="700">${this.oppTeamName.substring(0, 8)}</text>
+            <!-- Active Point Win % Callout Tag (Directly pinned at active head) -->
+            <g transform="translate(${tagX}, ${activePoint.y})">
+              <rect x="-4" y="-14" width="62" height="30" rx="4" fill="rgba(15, 23, 42, 0.85)" stroke="rgba(255,255,255,0.15)" stroke-width="1" />
+              <text x="2" y="-3" fill="#34d399" font-size="10.5" font-weight="800" font-family="monospace">${activePoint.winPct}%</text>
+              <text x="34" y="-3" fill="#94a3b8" font-size="7.5" font-weight="700">${this.userTeamName.substring(0, 4)}</text>
+              <text x="2" y="11" fill="#c084fc" font-size="10.5" font-weight="800" font-family="monospace">${activePoint.oppWinPct}%</text>
+              <text x="34" y="11" fill="#94a3b8" font-size="7.5" font-weight="700">${this.oppTeamName.substring(0, 4)}</text>
             </g>
 
             <!-- Time Ticks -->
