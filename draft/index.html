@@ -1148,20 +1148,19 @@ function resolvePlayer(sleeperId, firstName, lastName, pos) {
     }
   }
 
-  if (ln && pos) {
-    const candidate = PLAYERS.find(p => {
-      const pParts = normalizeName(p.name).split(' ');
-      const pLast = pParts[pParts.length - 1];
-      return pLast === normalizeName(ln) && p.pos === pos;
-    });
-    if (candidate) {
+  // Handle Defense team resolution
+  if (pos === 'DEF' && ln) {
+    const cleanLn = normalizeName(ln);
+    const defCandidate = PLAYERS.find(p => p.pos === 'DEF' && (normalizeName(p.name).includes(cleanLn) || p.team?.toLowerCase() === fn));
+    if (defCandidate) {
       if (sleeperId) {
-        candidate.sleeper_id = sleeperId;
-        bySleeperId[sleeperId] = candidate;
+        defCandidate.sleeper_id = sleeperId;
+        bySleeperId[sleeperId] = defCandidate;
       }
-      return candidate;
+      return defCandidate;
     }
   }
+
   return null;
 }
 
@@ -1596,8 +1595,8 @@ function toggleAutoPoll(enabled) {
   else stopAutoPolling();
 }
 
-const DRAFT_PLAYER_CACHE_KEY = 'sleeper_nfl_players_cache_v3';
-const DRAFT_PLAYER_CACHE_TIME_KEY = 'sleeper_nfl_players_time_v3';
+const DRAFT_PLAYER_CACHE_KEY = 'sleeper_nfl_players_cache_v4';
+const DRAFT_PLAYER_CACHE_TIME_KEY = 'sleeper_nfl_players_time_v4';
 const DRAFT_PLAYER_CACHE_TTL = 12 * 60 * 60 * 1000; // 12 Hours TTL
 
 async function fetchLiveInjuries(forceRefresh = false) {
