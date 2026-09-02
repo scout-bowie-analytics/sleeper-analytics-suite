@@ -1784,50 +1784,94 @@ async function initMockDraft() {
   }
 }
 
-async function onFetchLeagues() {
-  const input = document.getElementById('sleeperInput').value.trim();
+async function onFetchLeagues(customInput = null) {
+  const input = (customInput || document.getElementById('sleeperInput').value || '').trim();
   const statusEl = document.getElementById('modalStatus');
-  statusEl.textContent = '';
+  if (statusEl) statusEl.textContent = 'Sniffing out league & draft data...';
   if (!input) {
-    statusEl.textContent = 'Please enter a username or league ID.';
+    if (statusEl) statusEl.textContent = 'Please enter a username, league URL, or draft ID.';
     return;
   }
 
-  if (/^\d+$/.test(input)) {
-    try {
-      const res = await fetch(`https://api.sleeper.app/v1/league/${input}`);
-      if (!res.ok) throw new Error('League not found.');
-      const league = await res.json();
-      populateLeagueDropdown([league]);
-    } catch(e) {
-      statusEl.textContent = "Bowie couldn't sniff out that league ID or username. Double-check your spelling or try loading a sample matchup!";
-      triggerBowieToast("🐾 Bowie couldn't sniff out that league ID or username. Double-check your spelling or try loading a sample matchup!");
-    }
-  } else {
-    try {
-      const userRes = await fetch(`https://api.sleeper.app/v1/user/${input}`);
-      if (!userRes.ok) throw new Error('User not found.');
-      const userData = await userRes.json();
-      
-      const year = new Date().getFullYear();
-      let leaguesRes = await fetch(`https://api.sleeper.app/v1/user/${userData.user_id}/leagues/nfl/${year}`);
-      let leagues = await leaguesRes.json();
-      
-      if (!leagues || leagues.length === 0) {
-        leaguesRes = await fetch(`https://api.sleeper.app/v1/user/${userData.user_id}/leagues/nfl/${year - 1}`);
-        leagues = await leaguesRes.json();
-      }
+  // 1. Check for draft URLs or Draft IDs
+  const draftUrlMatch = input.match(/draft\/nfl\/([0-9a-zA-Z]+)/) || input.match(/draft\/([0-9a-zA-Z]+)/);
+  const leagueUrlMatch = input.match(/leagues?\/([0-9a-zA-Z]+)/);
+  const numericMatch = input.match(/([0-9]{15,})/);
 
-      if (!leagues || leagues.length === 0) {
-        statusEl.textContent = "Bowie couldn't sniff out that league ID or username. Double-check your spelling or try loading a sample matchup!";
-        triggerBowieToast("🐾 Bowie couldn't sniff out that league ID or username. Double-check your spelling or try loading a sample matchup!");
-        return;
+  let possibleDraftId = draftUrlMatch ? draftUrlMatch[1] : (numericMatch ? numericMatch[1] : null);
+  let possibleLeagueId = leagueUrlMatch ? leagueUrlMatch[1] : (numericMatch ? numericMatch[1] : null);
+
+  // If Draft URL or Draft ID provided directly
+  if (draftUrlMatch || possibleDraftId) {
+    const targetDraftId = draftUrlMatch ? draftUrlMatch[1] : possibleDraftId;
+    try {
+      const dRes = await fetch(`https://api.sleeper.app/v1/draft/${targetDraftId}`);
+      if (dRes.ok) {
+        const draftObj = await dRes.json();
+        if (draftObj && draftObj.draft_id) {
+          if (draftObj.league_id) {
+            const lRes = await fetch(`https://api.sleeper.app/v1/league/${draftObj.league_id}`);
+            if (lRes.ok) {
+              const leagueObj = await lRes.json();
+              if (statusEl) statusEl.textContent = '';
+              populateLeagueDropdown([leagueObj]);
+              return;
+            }
+          } else {
+            // Standalone Mock Draft without a league
+            if (statusEl) statusEl.textContent = '';
+            document.getElementById('mockDraftInput').value = targetDraftId;
+            switchSetupTab('mock');
+            await initMockDraft();
+            return;
+          }
+        }
       }
-      populateLeagueDropdown(leagues, userData.user_id);
     } catch(e) {
-      statusEl.textContent = "Bowie couldn't sniff out that league ID or username. Double-check your spelling or try loading a sample matchup!";
-      triggerBowieToast("🐾 Bowie couldn't sniff out that league ID or username. Double-check your spelling or try loading a sample matchup!");
+      console.warn('Draft resolution attempt failed:', e);
     }
+  }
+
+  // 2. If League ID or Numeric ID provided
+  if (possibleLeagueId) {
+    try {
+      const lRes = await fetch(`https://api.sleeper.app/v1/league/${possibleLeagueId}`);
+      if (lRes.ok) {
+        const leagueObj = await lRes.json();
+        if (leagueObj && leagueObj.league_id) {
+          if (statusEl) statusEl.textContent = '';
+          populateLeagueDropdown([leagueObj]);
+          return;
+        }
+      }
+    } catch(e) {}
+  }
+
+  // 3. Try as Sleeper Username
+  try {
+    const userRes = await fetch(`https://api.sleeper.app/v1/user/${input}`);
+    if (!userRes.ok) throw new Error('User not found.');
+    const userData = await userRes.json();
+    
+    const year = new Date().getFullYear();
+    let leaguesRes = await fetch(`https://api.sleeper.app/v1/user/${userData.user_id}/leagues/nfl/${year}`);
+    let leagues = await leaguesRes.json();
+    
+    if (!leagues || leagues.length === 0) {
+      leaguesRes = await fetch(`https://api.sleeper.app/v1/user/${userData.user_id}/leagues/nfl/${year - 1}`);
+      leagues = await leaguesRes.json();
+    }
+
+    if (!leagues || leagues.length === 0) {
+      if (statusEl) statusEl.textContent = "Bowie couldn't sniff out active leagues for that username.";
+      triggerBowieToast("🐾 Bowie couldn't sniff out active leagues for that username.");
+      return;
+    }
+    if (statusEl) statusEl.textContent = '';
+    populateLeagueDropdown(leagues, userData.user_id);
+  } catch(e) {
+    if (statusEl) statusEl.textContent = "Bowie couldn't sniff out that draft/league URL or username. Please check your link!";
+    triggerBowieToast("🐾 Bowie couldn't sniff out that draft/league URL or username. Please check your link!");
   }
 }
 
@@ -3090,7 +3134,19 @@ function copyQueueToClipboard() {
   }
 }
 
-if (!tryRestoreSession()) {
+// URL Query Parameter Auto-Load (e.g. ?draft=1399051083250188288 or ?league=1399051082381930496 or ?url=https://sleeper.com/draft/nfl/...)
+const urlParams = new URLSearchParams(window.location.search);
+const paramDraft = urlParams.get('draft') || urlParams.get('d') || urlParams.get('draft_id');
+const paramLeague = urlParams.get('league') || urlParams.get('l') || urlParams.get('league_id');
+const paramUser = urlParams.get('user') || urlParams.get('u') || urlParams.get('username');
+const paramUrl = urlParams.get('url');
+
+const autoTarget = paramDraft || paramLeague || paramUser || paramUrl;
+
+if (autoTarget) {
+  document.getElementById('sleeperInput').value = autoTarget;
+  onFetchLeagues(autoTarget);
+} else if (!tryRestoreSession()) {
   document.getElementById('setupModal').style.display = 'flex';
 }
 </script>
