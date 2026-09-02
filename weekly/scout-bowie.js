@@ -21,7 +21,7 @@ export class ScoutBowie {
   /**
    * Generate Full Matchup Dossier with Tactical Directives and Weather Callouts
    */
-  generateMatchupDossier(userStarters = [], userBench = [], oppStarters = [], simulation = {}, strategyWeight = 0.5) {
+  generateMatchupDossier(userStarters = [], userBench = [], oppStarters = [], simulation = {}, strategyWeight = 0.5, optimalStarters = []) {
     const winProbability = Number((simulation?.winProbability ?? 50).toFixed(1));
     const spread = Number((simulation?.spread ?? 0).toFixed(1));
 
@@ -33,8 +33,13 @@ export class ScoutBowie {
     const evaluatedStarters = userStarters.map(p => (p.floor !== undefined ? p : calculatePlayerDistributions(p)));
     const evaluatedBench = userBench.map(p => (p.floor !== undefined ? p : calculatePlayerDistributions(p)));
 
-    // 1. Identify Lock of the Week (Highest floor-to-bust ratio among Active Starters)
-    const lockCandidates = [...evaluatedStarters].sort((a, b) => {
+    // Filter to truly optimal starters for Lock of the Week & Boom candidates
+    const optimalIds = new Set((optimalStarters || []).map(p => p.player_id));
+    const optimalStartersPool = evaluatedStarters.filter(p => optimalIds.size === 0 || optimalIds.has(p.player_id));
+    const eligibleLockPool = optimalStartersPool.length > 0 ? optimalStartersPool : evaluatedStarters;
+
+    // 1. Identify Lock of the Week (Highest floor-to-bust ratio among OPTIMAL Active Starters)
+    const lockCandidates = [...eligibleLockPool].sort((a, b) => {
       const floorA = Number(a.floor ?? a.floor10 ?? a.mean ?? 10);
       const floorB = Number(b.floor ?? b.floor10 ?? b.mean ?? 10);
       const bustA = Number(a.bustRate ?? 15);
@@ -43,7 +48,7 @@ export class ScoutBowie {
       const scoreB = (floorB * 1.8) - (bustB * 0.5);
       return scoreB - scoreA;
     });
-    const lockCandidate = lockCandidates[0] || evaluatedStarters[0];
+    const lockCandidate = lockCandidates[0] || eligibleLockPool[0];
 
     const lockFloor = Number(lockCandidate.floor ?? lockCandidate.floor10 ?? 0).toFixed(1);
     const lockAlert = lockCandidate ? {
@@ -107,9 +112,9 @@ export class ScoutBowie {
       }
     }
 
-    // 3. Identify Boom Candidate from Active Starters (Highest absolute ceiling surge)
-    const nonLockForBoom = evaluatedStarters.filter(p => p.player_id !== lockCandidate?.player_id);
-    const boomPool = nonLockForBoom.length > 0 ? nonLockForBoom : evaluatedStarters;
+    // 3. Identify Boom Candidate from Active Starters (Highest absolute ceiling surge among optimal starters)
+    const nonLockForBoom = eligibleLockPool.filter(p => p.player_id !== lockCandidate?.player_id);
+    const boomPool = nonLockForBoom.length > 0 ? nonLockForBoom : eligibleLockPool;
 
     const boomCandidate = [...boomPool].sort((a, b) => {
       const surgeA = Number(a.ceilingSurge ?? ((a.ceil ?? a.ceiling90 ?? 0) - (a.proj ?? a.mean ?? 0)));

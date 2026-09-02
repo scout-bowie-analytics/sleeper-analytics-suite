@@ -2009,7 +2009,8 @@ class WeeklyOptimizerController {
       this.state.userBench,
       this.state.oppStarters,
       simResults,
-      this.state.strategyWeight
+      this.state.strategyWeight,
+      optimalSolution?.starters || []
     );
     this.state.bowieDossier = bowieDossier;
 
@@ -2337,6 +2338,18 @@ class WeeklyOptimizerController {
    * Determine Scout Alert Badge with Lock, Bark Warn, Boom, Optimal precedence
    */
   getScoutAlertBadge(player, optimalStarterIds, dossier) {
+    const isOptimal = !optimalStarterIds || optimalStarterIds.size === 0 || optimalStarterIds.has(player.player_id);
+
+    // If starter is SUB-OPTIMAL (there is a superior bench option):
+    if (!isOptimal) {
+      const swap = (this.state.recommendedSwaps || []).find(s => s.playerToBench?.player_id === player.player_id);
+      if (swap && swap.playerToStart) {
+        const sName = getCleanPlayerName(swap.playerToStart.full_name).split(' ').pop().toUpperCase();
+        return `<span class="badge-suboptimal fmt-badge" style="color:var(--caution);border-color:rgba(229,99,107,0.4);background:rgba(229,99,107,0.15);font-size:9.5px;font-weight:800;" title="Suboptimal: Start ${swap.playerToStart.full_name} instead">⚠️ START ${sName}</span>`;
+      }
+      return '<span class="badge-suboptimal fmt-badge" style="color:var(--caution);border-color:rgba(229,99,107,0.4);background:rgba(229,99,107,0.15);font-size:9.5px;font-weight:800;">⚠️ SUB-OPTIMAL</span>';
+    }
+
     const lockId = dossier?.lockAlert?.player?.player_id;
     const trapId = dossier?.trapAlert?.player?.player_id;
     const boomId = dossier?.boomAlert?.player?.player_id;
@@ -2350,10 +2363,7 @@ class WeeklyOptimizerController {
     if (player.player_id === boomId) {
       return '<span class="badge-boom boom-candidate-badge">🚀 BOOM</span>';
     }
-    if (optimalStarterIds.has(player.player_id)) {
-      return '<span class="badge-optimal fmt-badge active" style="font-size:9.5px;">OPTIMAL</span>';
-    }
-    return '<span class="badge-suboptimal fmt-badge" style="color:var(--caution);font-size:9.5px;">SUB-OPTIMAL</span>';
+    return '<span class="badge-optimal fmt-badge active" style="font-size:9.5px;">OPTIMAL</span>';
   }
 
   /**
