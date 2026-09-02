@@ -614,9 +614,6 @@ export class WormChartEngine {
             <span style="color:#fff;font-weight:700;">${this.oppTeamName}: <strong style="color:#c084fc;">${activePoint.raw.opponentScore.toFixed(1)}</strong></span>
             <span class="wss-margin ${diff >= 0 ? 'margin-pos' : 'margin-neg'}">${signDiff} pt lead</span>
           </span>
-          <span class="wss-prob ${activePoint.winPct >= 50 ? 'favored' : 'trailing'}">
-            ⚡ ${activePoint.winPct}% Win Probability
-          </span>
           ${activePoint.raw.keyEvent ? `<span class="wss-event">${activePoint.raw.keyEvent}</span>` : ''}
         </div>
 
