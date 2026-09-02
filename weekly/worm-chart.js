@@ -458,22 +458,13 @@ export class WormChartEngine {
 
     bar.style.display = 'flex';
 
-    const uScoreEl = document.getElementById('wbUserScore');
-    const oScoreEl = document.getElementById('wbOppScore');
     const uWinPillEl = document.getElementById('wbUserWinPill');
     const oWinPillEl = document.getElementById('wbOppWinPill');
-    const marginTextEl = document.getElementById('wbMarginText');
     const timeBadgeEl = document.getElementById('wbTimeBadge');
     const swingAlertEl = document.getElementById('wbSwingAlert');
 
-    const uScore = snapshot.userScore.toFixed(1);
-    const oScore = snapshot.opponentScore.toFixed(1);
     const uWin = snapshot.userWinPct.toFixed(1);
     const oWin = snapshot.opponentWinPct.toFixed(1);
-    const diff = Number((snapshot.userScore - snapshot.opponentScore).toFixed(1));
-
-    if (uScoreEl) uScoreEl.textContent = uScore;
-    if (oScoreEl) oScoreEl.textContent = oScore;
 
     if (uWinPillEl) {
       uWinPillEl.innerHTML = `<span class="team-label">${this.userTeamName.substring(0, 12)}</span> <span class="pct-val">${uWin}% WIN</span>`;
@@ -483,12 +474,6 @@ export class WormChartEngine {
     if (oWinPillEl) {
       oWinPillEl.innerHTML = `<span class="pct-val">${oWin}% WIN</span> <span class="team-label">${this.oppTeamName.substring(0, 12)}</span>`;
       oWinPillEl.className = `worm-pill opp-pill ${snapshot.opponentWinPct >= 50 ? 'favored' : 'trailing'}`;
-    }
-
-    if (marginTextEl) {
-      const sign = diff >= 0 ? `+${diff}` : `${diff}`;
-      marginTextEl.textContent = `${sign} pt margin`;
-      marginTextEl.className = diff >= 0 ? 'margin-pos' : 'margin-neg';
     }
 
     if (timeBadgeEl) {
