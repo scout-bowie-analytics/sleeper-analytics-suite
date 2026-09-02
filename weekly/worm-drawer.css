@@ -219,10 +219,14 @@
   transform: translateY(-1px);
 }
 
+.chart-selector-wrapper select:hover {
+  border-color: rgba(234, 179, 8, 0.8) !important;
+  background: rgba(30, 41, 59, 0.95) !important;
+}
+
 .worm-chart-body {
-  flex: 1;
+  height: 250px;
   position: relative;
-  min-height: 0;
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;

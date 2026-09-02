@@ -230,7 +230,9 @@ class WeeklyOptimizerController {
       selectedWaiverPos: 'ALL',
       waiverSearchQuery: '',
       waiverCurrentSort: 'delta_desc',
-      isWaiverDrawerOpen: false
+      isWaiverDrawerOpen: false,
+      chartMode: 'density',
+      lastSimResults: null
     };
 
     this.waiverEngine = new WaiverEngine();
@@ -369,6 +371,7 @@ class WeeklyOptimizerController {
     window.importMatchupPayload = (payload) => this.importMatchupPayload(payload);
     window.openWaiverDrawer = () => this.openWaiverDrawer();
     window.closeWaiverDrawer = () => this.closeWaiverDrawer();
+    window.onChartModeChange = (mode) => this.onChartModeChange(mode);
     window.toggleWormDrawer = () => this.toggleWormDrawer();
     window.scrubWormTimeline = (idx) => this.scrubWormTimeline(idx);
     window.toggleWormPlay = () => this.toggleWormPlay();
@@ -2048,13 +2051,16 @@ class WeeklyOptimizerController {
         this.renderBenchTable(this.state.userBench, optimalSolution, bowieDossier, false);
       }
 
-      this.renderDensityChart(simResults);
+      this.state.lastSimResults = simResults;
+      if (this.state.chartMode === 'density') {
+        this.renderDensityChart(simResults);
+      }
       this.runGamedayAlertSweeps();
 
       // Update In-Game Win Probability Worm Engine
       if (this.wormEngine) {
-        this.wormEngine.userTeamName = this.state.userTeamName || 'Your Team';
-        this.wormEngine.oppTeamName = this.state.oppTeamName || 'Opponent';
+        this.wormEngine.userTeamName = this.state.userTeamName || 'Quantum Blitz';
+        this.wormEngine.oppTeamName = this.state.oppTeamName || 'Apex Predators';
 
         const userBanked = (this.state.userStarters || []).reduce((acc, p) => acc + (p.points_scored || p.points_banked || p.actual_pts || p.actual_points || 0), 0);
         const oppBanked = (this.state.oppStarters || []).reduce((acc, p) => acc + (p.points_scored || p.points_banked || p.actual_pts || p.actual_points || 0), 0);
@@ -2068,16 +2074,44 @@ class WeeklyOptimizerController {
             userWinPct: simResults.winProbability,
             opponentWinPct: simResults.oppWinProbability
           });
-        } else {
+        }
+        
+        if (this.state.chartMode === 'worm') {
           this.wormEngine.render();
-          this.wormEngine.updateBottomBar();
         }
       }
     }
   }
 
+  onChartModeChange(mode) {
+    this.state.chartMode = mode || 'density';
+    const densityBox = document.getElementById('densityChartBox');
+    const wormBox = document.getElementById('wormChartBox');
+    const wormControls = document.getElementById('wormHeaderControls');
+    const modeSelect = document.getElementById('chartModeSelect');
+    if (modeSelect && modeSelect.value !== this.state.chartMode) {
+      modeSelect.value = this.state.chartMode;
+    }
+
+    if (this.state.chartMode === 'worm') {
+      if (densityBox) densityBox.style.display = 'none';
+      if (wormBox) wormBox.style.display = 'block';
+      if (wormControls) wormControls.style.display = 'flex';
+      if (this.wormEngine) {
+        this.wormEngine.render();
+      }
+    } else {
+      if (densityBox) densityBox.style.display = 'block';
+      if (wormBox) wormBox.style.display = 'none';
+      if (wormControls) wormControls.style.display = 'none';
+      if (this.state.lastSimResults) {
+        this.renderDensityChart(this.state.lastSimResults);
+      }
+    }
+  }
+
   toggleWormDrawer() {
-    if (this.wormEngine) this.wormEngine.toggleDrawer();
+    this.onChartModeChange(this.state.chartMode === 'worm' ? 'density' : 'worm');
   }
 
   scrubWormTimeline(index) {

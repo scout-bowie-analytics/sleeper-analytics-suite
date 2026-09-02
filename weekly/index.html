@@ -36,6 +36,7 @@
     window.openPlayerDrawer = function(id) { window.weeklyOptimizer && window.weeklyOptimizer.openPlayerDrawer(id); };
     window.openWaiverDrawer = function() { window.weeklyOptimizer && window.weeklyOptimizer.openWaiverDrawer(); };
     window.closeWaiverDrawer = function() { window.weeklyOptimizer && window.weeklyOptimizer.closeWaiverDrawer(); };
+    window.onChartModeChange = function(m) { window.weeklyOptimizer && window.weeklyOptimizer.onChartModeChange(m); };
     window.toggleWormDrawer = function() { window.weeklyOptimizer && window.weeklyOptimizer.toggleWormDrawer(); };
     window.scrubWormTimeline = function(idx) { window.weeklyOptimizer && window.weeklyOptimizer.scrubWormTimeline(idx); };
     window.toggleWormPlay = function() { window.weeklyOptimizer && window.weeklyOptimizer.toggleWormPlay(); };
@@ -1298,14 +1299,36 @@
           </div>
         </div>
 
-        <!-- 10,000-Iteration Probability Density Chart -->
-        <div class="card" id="densityChartCard" style="margin-top:16px;padding-bottom:14px;">
-          <div class="table-header-row" style="flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px;">
-            <h2 style="margin:0;">10k Monte Carlo Density Curves</h2>
-            <span id="chartWinBadge" class="badge-winrate" style="font-size:11px;font-weight:800;padding:3px 9px;border-radius:6px;">LIVE SIM</span>
+        <!-- Analytics & Simulation Chart Card (Dropdown: Density Curves vs Win Probability Swing Chart) -->
+        <div class="card" id="analyticsChartCard" style="margin-top:16px;padding-bottom:14px;">
+          <div class="table-header-row" style="flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <!-- Chart Mode Dropdown Selector -->
+              <div class="chart-selector-wrapper" style="position:relative;display:inline-flex;align-items:center;">
+                <select id="chartModeSelect" onchange="onChartModeChange(this.value)" style="background:rgba(15,23,42,0.92);border:1.5px solid rgba(234,179,8,0.45);color:#fff;font-size:13px;font-weight:800;padding:6px 30px 6px 12px;border-radius:8px;cursor:pointer;outline:none;-webkit-appearance:none;appearance:none;box-shadow:0 2px 8px rgba(0,0,0,0.4);">
+                  <option value="density">📊 10K Monte Carlo Density Curves</option>
+                  <option value="worm">📈 In-Game Win Probability Swing Chart</option>
+                </select>
+                <span style="position:absolute;right:10px;pointer-events:none;font-size:10px;color:var(--gold);">&#9660;</span>
+              </div>
+              <span id="chartWinBadge" class="badge-winrate" style="font-size:11px;font-weight:800;padding:3px 9px;border-radius:6px;">LIVE SIM</span>
+            </div>
+
+            <!-- In-Game Worm Replay Controls (Only visible in worm chart mode) -->
+            <div id="wormHeaderControls" class="wd-scrubber-container" style="display:none;max-width:280px;padding:3px 8px;background:rgba(15,23,42,0.6);border:1px solid rgba(255,255,255,0.08);border-radius:6px;">
+              <button id="wormPlayBtn" class="wd-btn-play" onclick="toggleWormPlay()">▶ Replay</button>
+              <input type="range" id="wormTimelineScrubber" class="wd-scrubber" min="0" max="0" value="0" oninput="scrubWormTimeline(this.value)">
+            </div>
           </div>
-          <div class="chart-box" style="height:250px;position:relative;margin-top:4px;">
+
+          <!-- Chart Box 1: 10K Density Curves -->
+          <div id="densityChartBox" class="chart-box" style="height:250px;position:relative;margin-top:4px;">
             <canvas id="densityChart"></canvas>
+          </div>
+
+          <!-- Chart Box 2: Two-Tone Worm Swing Chart -->
+          <div id="wormChartBox" class="worm-chart-body" style="display:none;min-height:220px;position:relative;margin-top:4px;">
+            <div id="wormChartContainer" style="width:100%;height:100%;"></div>
           </div>
         </div>
 
@@ -1408,39 +1431,8 @@
       </a>
     </div>
 
-  </div>
-
-  <!-- Live In-Game Worm Chart Slide-Up Bottom Drawer -->
-  <div id="wormDrawerPanel" class="worm-drawer-panel">
-    <div class="worm-drawer-header">
-      <div class="wd-title-group">
-        <div class="wd-title">
-          <span style="color:#4fd1a5;">📈</span>
-          <span>Matchup Win Probability Swing Chart</span>
-        </div>
-      </div>
-
-      <!-- Timeline Scrubber Controls -->
-      <div class="wd-scrubber-container">
-        <button id="wormPlayBtn" class="wd-btn-play" onclick="toggleWormPlay()">▶ Replay</button>
-        <input type="range" id="wormTimelineScrubber" class="wd-scrubber" min="0" max="0" value="0" oninput="scrubWormTimeline(this.value)">
-      </div>
-
-      <button class="drawer-close" onclick="toggleWormDrawer()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;" title="Close Swing Chart">&times;</button>
     </div>
 
-    <!-- Chart Body Container -->
-    <div id="wormChartContainer" class="worm-chart-body">
-      <!-- SVG Worm Chart rendered here dynamically by WormChartEngine -->
-    </div>
-  </div>
-
-  <!-- Collapsed Bottom Bar Toggle -->
-  <div id="wormBottomBar" class="worm-bottom-bar" onclick="toggleWormDrawer()" style="cursor:pointer;" title="Click to toggle In-Game Win Probability Swing Chart">
-    <button class="wb-btn-expand" onclick="event.stopPropagation(); toggleWormDrawer();">
-      <span>📈 Matchup Win Probability Swing Chart</span>
-      <span id="wormDrawerChevron" style="font-size:10px;margin-left:4px;">&#9650;</span>
-    </button>
   </div>
 
   <!-- Guided Feature Tour Engine -->
