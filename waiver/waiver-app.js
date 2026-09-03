@@ -267,6 +267,12 @@ class WaiverApp {
       trendingDropsMap
     );
 
+    // Check waiver system type: 0 = Rolling wire (Priority order), 1 = FAAB, 2 = Reverse standings
+    const waiverType = Number(this.state.currentLeague?.settings?.waiver_type ?? 0);
+    const isFaab = (waiverType === 1);
+    this.state.isFaabLeague = isFaab;
+    this.state.waiverType = waiverType;
+
     // Automatically calculate remaining FAAB budget from Sleeper league settings & user roster
     const totalBudget = Number(this.state.currentLeague?.settings?.waiver_budget ?? 100);
     const budgetUsed = Number(this.state.userRoster?.settings?.waiver_budget_used ?? 0);
@@ -276,6 +282,26 @@ class WaiverApp {
       this.state.userFaab = remainingFaab;
       const faabInput = document.getElementById('userFaabInput');
       if (faabInput) faabInput.value = remainingFaab;
+    }
+
+    const faabContainer = document.getElementById('faabBudgetContainer');
+    const priorityContainer = document.getElementById('rollingPriorityContainer');
+    const priorityVal = document.getElementById('waiverPriorityVal');
+    const sortOption = document.querySelector('#waiverSort option[value="faab_desc"]');
+
+    if (isFaab) {
+      if (faabContainer) faabContainer.style.display = 'inline-flex';
+      if (priorityContainer) priorityContainer.style.display = 'none';
+      if (sortOption) sortOption.textContent = 'Sort: FAAB Priority';
+    } else {
+      const userRoster = this.state.rosters?.find(r => r.roster_id === this.state.userRoster?.roster_id) || this.state.userRoster;
+      const waiverPos = userRoster?.settings?.waiver_position || userRoster?.waiver_position || 1;
+      const totalTeams = this.state.currentLeague?.total_rosters || this.state.rosters?.length || 12;
+
+      if (faabContainer) faabContainer.style.display = 'none';
+      if (priorityContainer) priorityContainer.style.display = 'inline-flex';
+      if (priorityVal) priorityVal.textContent = `#${waiverPos} of ${totalTeams}`;
+      if (sortOption) sortOption.textContent = 'Sort: Claim Priority';
     }
 
     // Fetch NFL state to check season kickoff dates
@@ -613,14 +639,24 @@ class WaiverApp {
             </div>
           </div>
 
-          <!-- Col 2: Single Smart FAAB Bid -->
+          <!-- Col 2: Smart FAAB / Claim Priority -->
           <div class="smart-faab-card">
-            <div class="smart-faab-label">Recommended FAAB</div>
-            <div class="smart-faab-value ${item.faabBid?.isFreeAdd ? 'smart-faab-free' : ''}">
-              ${item.faabBid?.label || `$${item.faabBids?.targeted?.dollars ?? 0} (${item.faabBids?.targeted?.percent ?? 0}%)`}
+            <div class="smart-faab-label">${this.state.isFaabLeague ? 'Recommended FAAB' : 'Claim Urgency'}</div>
+            <div class="smart-faab-value ${this.state.isFaabLeague ? (item.faabBid?.isFreeAdd ? 'smart-faab-free' : '') : ''}">
+              ${this.state.isFaabLeague 
+                ? (item.faabBid?.label || `$${item.faabBids?.targeted?.dollars ?? 0} (${item.faabBids?.targeted?.percent ?? 0}%)`)
+                : (item.isNextManUp || item.netDelta >= 4.0 || (item.contingent_score && item.contingent_score >= 85)
+                    ? '<span style="color:#f59e0b;">High Priority</span>'
+                    : (item.netDelta >= 1.5 || (item.streamingScore && item.streamingScore >= 80) || (item.contingent_score && item.contingent_score >= 70)
+                        ? '<span style="color:#38bdf8;">Mid Priority</span>'
+                        : (item.netDelta > 0 || (item.trending_adds && item.trending_adds > 10000)
+                            ? '<span style="color:#94a3b8;">Speculative</span>'
+                            : '<span style="color:#34d399;">Free Add</span>')))}
             </div>
             <div class="smart-faab-context">
-              ${item.faabBid?.isFreeAdd ? '⚡ Free Add (Week 0 / Open FA)' : '🎯 Optimal Clearing Price'}
+              ${this.state.isFaabLeague 
+                ? (item.faabBid?.isFreeAdd ? '⚡ Free Add (Week 0 / Open FA)' : '🎯 Optimal Clearing Price')
+                : (item.isNextManUp || item.netDelta >= 4.0 ? '🚨 Must-Burn Waiver Priority' : (item.netDelta >= 1.5 ? '⚡ Recommended Claim' : '📦 Low-Cost / Free Agent Flier'))}
             </div>
           </div>
 

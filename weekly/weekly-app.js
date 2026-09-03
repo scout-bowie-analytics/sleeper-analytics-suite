@@ -3261,8 +3261,14 @@ class WeeklyOptimizerController {
         scoringSettings
       );
 
+      // Check waiver system type: 0 = Rolling wire (Priority order), 1 = FAAB, 2 = Reverse standings
+      const waiverType = Number(this.state.currentLeague?.settings?.waiver_type ?? 0);
+      const isFaab = (waiverType === 1);
+      this.state.isFaabLeague = isFaab;
+      this.state.waiverType = waiverType;
+
       // Automatically calculate remaining FAAB budget from Sleeper league settings & user roster
-      const totalBudget = Number(this.state.league?.settings?.waiver_budget ?? 100);
+      const totalBudget = Number(this.state.currentLeague?.settings?.waiver_budget ?? 100);
       const budgetUsed = Number(this.state.userRoster?.settings?.waiver_budget_used ?? 0);
       const remainingFaab = Math.max(0, totalBudget - budgetUsed);
 
@@ -3271,6 +3277,8 @@ class WeeklyOptimizerController {
         const faabInput = document.getElementById('drawerFaabInput');
         if (faabInput) faabInput.value = remainingFaab;
       }
+
+      this.updateWaiverDrawerHeader();
 
       // Fetch NFL state to check season kickoff dates
       let nflState = this.state.nflState;
@@ -3382,11 +3390,51 @@ class WeeklyOptimizerController {
     }
   }
 
+  updateWaiverDrawerHeader() {
+    const waiverType = Number(this.state.currentLeague?.settings?.waiver_type ?? 0);
+    const isFaab = (waiverType === 1);
+    this.state.isFaabLeague = isFaab;
+
+    const typeBadge = document.getElementById('drawerWaiverTypeBadge');
+    const faabContainer = document.getElementById('drawerFaabBudgetContainer');
+    const priorityContainer = document.getElementById('drawerRollingPriorityContainer');
+    const priorityVal = document.getElementById('drawerWaiverPriorityVal');
+    const sortOption = document.querySelector('#drawerWaiverSort option[value="faab_desc"]');
+
+    if (isFaab) {
+      if (typeBadge) {
+        typeBadge.textContent = 'FAAB LAB';
+        typeBadge.style.background = 'rgba(234,179,8,0.15)';
+        typeBadge.style.border = '1px solid rgba(234,179,8,0.4)';
+        typeBadge.style.color = 'var(--gold)';
+      }
+      if (faabContainer) faabContainer.style.display = 'inline-flex';
+      if (priorityContainer) priorityContainer.style.display = 'none';
+      if (sortOption) sortOption.textContent = 'FAAB Priority';
+    } else {
+      const userRoster = this.state.leagueRosters?.find(r => r.roster_id === this.state.userRosterId);
+      const waiverPos = userRoster?.settings?.waiver_position || userRoster?.waiver_position || 1;
+      const totalTeams = this.state.currentLeague?.total_rosters || this.state.leagueRosters?.length || 12;
+
+      if (typeBadge) {
+        typeBadge.textContent = waiverType === 2 ? 'STANDINGS WIRE' : 'ROLLING WIRE';
+        typeBadge.style.background = 'rgba(56,189,248,0.15)';
+        typeBadge.style.border = '1px solid rgba(56,189,248,0.4)';
+        typeBadge.style.color = '#38bdf8';
+      }
+      if (faabContainer) faabContainer.style.display = 'none';
+      if (priorityContainer) priorityContainer.style.display = 'inline-flex';
+      if (priorityVal) priorityVal.textContent = `#${waiverPos} of ${totalTeams}`;
+      if (sortOption) sortOption.textContent = 'Claim Priority';
+    }
+  }
+
   openWaiverDrawer() {
     this.state.isWaiverDrawerOpen = true;
     document.body.classList.add('waiver-drawer-open');
     document.getElementById('waiverDrawerOverlay')?.classList.add('active');
     document.getElementById('waiverRadarDrawer')?.classList.add('active');
+    this.updateWaiverDrawerHeader();
     if (!this.state.waiverTargets || this.state.waiverTargets.length === 0) {
       this.loadWaiverTargets();
     } else {
@@ -3566,8 +3614,33 @@ class WeeklyOptimizerController {
         dropTickerHtml = `<span class="ticker-pill ticker-down" title="${player.suggestedDrop.player.trend.count} drops in 24h">${player.suggestedDrop.player.trend.formatted}</span>`;
       }
 
-      const bidLabel = player.faabBid?.label || `$${player.faabBids?.targeted?.dollars ?? 0} (${player.faabBids?.targeted?.percent ?? 0}%)`;
-      const isFree = Boolean(player.faabBid?.isFreeAdd);
+      const isFaab = Boolean(this.state.isFaabLeague);
+      let claimHtml = '';
+
+      if (isFaab) {
+        const bidLabel = player.faabBid?.label || `$${player.faabBids?.targeted?.dollars ?? 0} (${player.faabBids?.targeted?.percent ?? 0}%)`;
+        const isFree = Boolean(player.faabBid?.isFreeAdd);
+        claimHtml = `FAAB: <span style="color: ${isFree ? '#34d399' : 'var(--gold)'}; font-weight: 800;">${bidLabel}</span>`;
+      } else {
+        let claimText = 'Free Agent Add';
+        let claimColor = '#34d399';
+
+        if (player.isNextManUp || player.netDelta >= 4.0 || (player.contingent_score && player.contingent_score >= 85)) {
+          claimText = 'High Priority Claim';
+          claimColor = '#f59e0b';
+        } else if (player.netDelta >= 1.5 || (player.streamingScore && player.streamingScore >= 80) || (player.contingent_score && player.contingent_score >= 70)) {
+          claimText = 'Mid Priority Claim';
+          claimColor = '#38bdf8';
+        } else if (player.netDelta > 0 || (player.trending_adds && player.trending_adds > 10000)) {
+          claimText = 'Speculative / Low';
+          claimColor = '#94a3b8';
+        } else {
+          claimText = 'Free Add / Flier';
+          claimColor = '#34d399';
+        }
+
+        claimHtml = `CLAIM: <span style="color: ${claimColor}; font-weight: 800;">${claimText}</span>`;
+      }
 
       const avatarUrl = player.avatar || (player.position === 'DEF' 
         ? `https://sleepercdn.com/images/team_logos/nfl/${(player.team || player.player_id || '').toLowerCase()}.png`
@@ -3605,7 +3678,7 @@ class WeeklyOptimizerController {
               ${dropTickerHtml}
             </div>
             <div class="drawer-faab-bid">
-              FAAB: <span style="color: ${isFree ? '#34d399' : 'var(--gold)'}; font-weight: 800;">${bidLabel}</span>
+              ${claimHtml}
             </div>
           </div>
         </div>

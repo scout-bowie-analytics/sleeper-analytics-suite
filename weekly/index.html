@@ -1353,7 +1353,7 @@
           <div>
             <div style="font-size:15px;font-weight:800;color:#fff;display:flex;align-items:center;gap:6px;">
               <span>Waiver Wire Radar</span>
-              <span class="golden-bone-badge" style="font-size:9px;padding:1px 5px;">FAAB LAB</span>
+              <span id="drawerWaiverTypeBadge" class="golden-bone-badge" style="font-size:9px;padding:1px 5px;">FAAB LAB</span>
             </div>
             <div style="font-size:11px;color:var(--muted);margin-top:1px;">Live Free Agent Upgrades vs Active Bench</div>
           </div>
@@ -1361,14 +1361,18 @@
         <button class="drawer-close" onclick="closeWaiverDrawer()" style="position:static;font-size:24px;line-height:1;cursor:pointer;background:none;border:none;color:var(--muted);">&times;</button>
       </div>
 
-      <!-- FAAB Budget Pill & Quick Summary -->
+      <!-- FAAB Budget / Rolling Priority Pill & Quick Summary -->
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:12px;background:rgba(11,16,25,0.5);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:6px 10px;">
         <div id="waiverDrawerSummary" style="color:var(--text);font-size:11.5px;font-weight:600;">
           Scanning free agents vs active bench...
         </div>
-        <div class="faab-budget-pill" style="font-size:11px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);border-radius:6px;color:var(--gold);font-weight:700;" title="Remaining FAAB Budget">
+        <div id="drawerFaabBudgetContainer" class="faab-budget-pill" style="font-size:11px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);border-radius:6px;color:var(--gold);font-weight:700;" title="Remaining FAAB Budget">
           <span>FAAB: $</span>
           <input type="number" id="drawerFaabInput" class="faab-input-edit" value="100" min="0" max="1000" style="width:45px;font-size:11px;background:transparent;border:none;color:var(--gold);font-weight:800;text-align:right;" onchange="onDrawerFaabChanged()">
+        </div>
+        <div id="drawerRollingPriorityContainer" style="display:none;font-size:11px;padding:3px 9px;align-items:center;gap:5px;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.35);border-radius:6px;color:#38bdf8;font-weight:700;" title="Current Waiver Order Priority">
+          <span>PRIORITY:</span>
+          <span id="drawerWaiverPriorityVal" style="font-weight:800;color:#fff;">#1 of 12</span>
         </div>
       </div>
     </div>
@@ -1425,10 +1429,7 @@
     </div>
 
     <!-- Drawer Footer Actions -->
-    <div class="waiver-drawer-footer" style="padding:12px 16px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;background:rgba(15,23,42,0.98);">
-      <button class="btn-copy-claims" onclick="copyDrawerClaims()" style="padding:6px 14px;font-size:12px;background:rgba(234,179,8,0.15);border:1px solid rgba(234,179,8,0.4);color:var(--gold);border-radius:6px;font-weight:700;cursor:pointer;">
-        <span>📋 Copy Priority Claims</span>
-      </button>
+    <div class="waiver-drawer-footer" style="padding:10px 16px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:flex-end;align-items:center;background:rgba(15,23,42,0.98);">
       <a href="../waiver/index.html" target="_blank" style="color:var(--muted);text-decoration:none;font-size:11.5px;display:flex;align-items:center;gap:4px;">
         <span>Full Page Radar ↗</span>
       </a>
