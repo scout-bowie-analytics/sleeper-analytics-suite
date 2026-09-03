@@ -804,6 +804,20 @@ tr:last-child td {
   transform: translateX(-50%);
 }
 
+.range-endpoint.tight-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  transform: translateX(-50%);
+  font-weight: 700;
+}
+
+.range-endpoint.tight-range .range-dash {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.65rem;
+  margin: 0 1px;
+}
+
 /* Dedicated Player Status Badges */
 .badge-status {
   display: inline-flex;

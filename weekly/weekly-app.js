@@ -143,6 +143,19 @@ export function renderProjectionRangeBar(dist) {
     const ceilPct = Math.max(0, Math.min(100, (ceil / MAX_PTS) * 100));
     const projPct = Math.max(0, Math.min(100, (proj / MAX_PTS) * 100));
     const remainingWidth = Math.max(4, ceilPct - floorPct);
+    const isTight = (ceilPct - floorPct) < 18;
+
+    const floorTransform = floorPct < 8 ? 'transform: translateX(0%);' : (floorPct > 92 ? 'transform: translateX(-100%);' : 'transform: translateX(-50%);');
+    const ceilTransform = ceilPct > 92 ? 'transform: translateX(-100%);' : (ceilPct < 8 ? 'transform: translateX(0%);' : 'transform: translateX(-50%);');
+
+    const endpointsHtml = isTight
+      ? `<span class="range-endpoint tight-range" style="left: ${((floorPct + ceilPct) / 2).toFixed(1)}%;">
+           <span style="color: #10b981;">${floor.toFixed(1)}</span>
+           <span class="range-dash">&ndash;</span>
+           <span style="color: var(--gold);">${ceil.toFixed(1)}</span>
+         </span>`
+      : `<span class="range-endpoint floor" style="left: ${floorPct.toFixed(1)}%; ${floorTransform}; color: #10b981;">${floor.toFixed(1)}</span>
+         <span class="range-endpoint ceil" style="left: ${ceilPct.toFixed(1)}%; ${ceilTransform}; color: var(--gold);">${ceil.toFixed(1)}</span>`;
 
     return `
       <div class="range-container" title="Live Gameday: ${banked.toFixed(1)} pts banked | Live Projected: ${proj.toFixed(1)} pts (Floor: ${floor.toFixed(1)} · Ceil: ${ceil.toFixed(1)})">
@@ -158,8 +171,7 @@ export function renderProjectionRangeBar(dist) {
             <span class="range-pin-bubble" style="background: rgba(16, 185, 129, 0.95); border-color: #10b981; color: #fff;">${proj.toFixed(1)}</span>
           </div>
 
-          <span class="range-endpoint floor" style="left: ${floorPct.toFixed(1)}%; transform: translateX(-50%); color: #10b981;">${floor.toFixed(1)}</span>
-          <span class="range-endpoint ceil" style="left: ${ceilPct.toFixed(1)}%; transform: translateX(-50%); color: var(--gold);">${ceil.toFixed(1)}</span>
+          ${endpointsHtml}
         </div>
       </div>
     `;
@@ -170,10 +182,20 @@ export function renderProjectionRangeBar(dist) {
   const ceilPct = Math.max(0, Math.min(100, (ceil / MAX_PTS) * 100));
   const projPct = Math.max(0, Math.min(100, (proj / MAX_PTS) * 100));
   const barWidth = Math.max(4, ceilPct - floorPct);
+  const isTight = (ceilPct - floorPct) < 18;
 
   // Boundary clipping guards
   const floorTransform = floorPct < 8 ? 'transform: translateX(0%);' : (floorPct > 92 ? 'transform: translateX(-100%);' : 'transform: translateX(-50%);');
   const ceilTransform = ceilPct > 92 ? 'transform: translateX(-100%);' : (ceilPct < 8 ? 'transform: translateX(0%);' : 'transform: translateX(-50%);');
+
+  const endpointsHtml = isTight
+    ? `<span class="range-endpoint tight-range" style="left: ${((floorPct + ceilPct) / 2).toFixed(1)}%;">
+         <span style="color: #94a3b8;">${floor.toFixed(1)}</span>
+         <span class="range-dash">&ndash;</span>
+         <span style="color: var(--gold);">${ceil.toFixed(1)}</span>
+       </span>`
+    : `<span class="range-endpoint floor" style="left: ${floorPct.toFixed(1)}%; ${floorTransform}">${floor.toFixed(1)}</span>
+       <span class="range-endpoint ceil" style="left: ${ceilPct.toFixed(1)}%; ${ceilTransform}">${ceil.toFixed(1)}</span>`;
 
   return `
     <div class="range-container" title="Floor (10th): ${floor.toFixed(1)} pts | Expected E[X]: ${proj.toFixed(1)} pts | Ceiling (90th): ${ceil.toFixed(1)} pts (0-35 pt scale)">
@@ -186,9 +208,8 @@ export function renderProjectionRangeBar(dist) {
           <span class="range-pin-bubble">${proj.toFixed(1)}</span>
         </div>
 
-        <!-- Dynamic Floor & Ceiling Anchors (Positioned below the bar) -->
-        <span class="range-endpoint floor" style="left: ${floorPct.toFixed(1)}%; ${floorTransform}">${floor.toFixed(1)}</span>
-        <span class="range-endpoint ceil" style="left: ${ceilPct.toFixed(1)}%; ${ceilTransform}">${ceil.toFixed(1)}</span>
+        <!-- Dynamic Floor & Ceiling Anchors (Positioned below the bar, unified if tight) -->
+        ${endpointsHtml}
       </div>
     </div>
   `;
