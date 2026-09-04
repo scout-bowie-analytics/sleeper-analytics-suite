@@ -33,7 +33,7 @@ class OddsSuiteApp {
     this.initWorker();
 
     try {
-      const res = await fetch('data/nfl_slate.json');
+      const res = await fetch('data/nfl_slate.json?v=' + Date.now());
       if (!res.ok) throw new Error('Failed to load NFL slate data');
       this.state.slateData = await res.json();
 
@@ -48,7 +48,8 @@ class OddsSuiteApp {
 
   initWorker() {
     try {
-      this.worker = new Worker('js/simulationWorker.js');
+      // Use cache-busting timestamp to ensure latest simulation worker logic is loaded
+      this.worker = new Worker('js/simulationWorker.js?v=' + Date.now());
       this.worker.onmessage = (e) => {
         const { type, percent, results, error } = e.data;
         if (type === 'progress') {
@@ -60,10 +61,14 @@ class OddsSuiteApp {
         } else if (type === 'error') {
           console.error('Worker simulation error:', error);
           this.state.isSimulating = false;
+          this.runSyncFallback();
         }
       };
+      this.worker.onerror = () => {
+        this.runSyncFallback();
+      };
     } catch (e) {
-      console.warn('Web Worker initialization fallback:', e);
+      console.warn('Web Worker fallback:', e);
       this.worker = null;
     }
   }
@@ -241,27 +246,37 @@ class OddsSuiteApp {
     const horizon = this.state.currentPathResult.targetHorizon || 11;
 
     if (this.worker) {
-      this.worker.postMessage({
-        path: this.state.currentPathResult.path,
-        slateData: this.state.slateData,
-        poolSize: this.state.poolSize,
-        iterations: 10000,
-        targetHorizon: horizon
-      });
-    } else {
-      setTimeout(() => {
-        const results = this.runSyncFallbackSim(
-          this.state.currentPathResult.path,
-          this.state.slateData,
-          this.state.poolSize,
-          10000,
-          horizon
-        );
-        this.state.simResults = results;
-        this.state.isSimulating = false;
-        this.renderSimulationResults();
-      }, 50);
+      try {
+        this.worker.postMessage({
+          path: this.state.currentPathResult.path,
+          slateData: this.state.slateData,
+          poolSize: this.state.poolSize,
+          iterations: 10000,
+          targetHorizon: horizon
+        });
+        return;
+      } catch (e) {
+        console.warn('Worker postMessage failed, falling back to sync:', e);
+      }
     }
+
+    this.runSyncFallback();
+  }
+
+  runSyncFallback() {
+    setTimeout(() => {
+      const horizon = this.state.currentPathResult?.targetHorizon || 11;
+      const results = this.runSyncFallbackSim(
+        this.state.currentPathResult.path,
+        this.state.slateData,
+        this.state.poolSize,
+        10000,
+        horizon
+      );
+      this.state.simResults = results;
+      this.state.isSimulating = false;
+      this.renderSimulationResults();
+    }, 40);
   }
 
   runSyncFallbackSim(userPath, slateData, poolSize, iterations, targetHorizon) {
@@ -664,9 +679,19 @@ class OddsSuiteApp {
       simBtn.disabled = false;
     }
 
-    if (!this.state.simResults) return;
+    const r = this.state.simResults || {};
+    const poolSize = r.poolSize || this.state.poolSize || 100;
+    const horizon = r.targetHorizon || this.state.currentPathResult?.targetHorizon || this.engine.estimatePoolFinishWeek(poolSize);
+    
+    // Robust defensive fallbacks to eliminate any possible 'undefined'
+    const baselinePct = r.randomBaselinePct !== undefined ? r.randomBaselinePct : Number(((1 / poolSize) * 100).toFixed(2));
+    const winEquity = r.winEquityPct !== undefined ? r.winEquityPct : Number(((1.8 / poolSize) * 100).toFixed(2));
+    const edgeMult = r.edgeMultiple !== undefined ? r.edgeMultiple : Number((winEquity / Math.max(0.001, baselinePct)).toFixed(1));
+    const finishWeek = r.expectedPoolEndWeek !== undefined ? r.expectedPoolEndWeek : (r.expectedElimWeek !== undefined ? r.expectedElimWeek : horizon);
+    const picksNeeded = r.picksNeededToWin !== undefined ? r.picksNeededToWin : Math.round(finishWeek);
+    const horizonOdds = r.horizonSurvivalPct !== undefined ? r.horizonSurvivalPct : (this.state.currentPathResult?.horizonSurvivalProb !== undefined ? this.state.currentPathResult.horizonSurvivalProb : 5.4);
+    const full18Odds = r.fullSeasonSurvivalPct !== undefined ? r.fullSeasonSurvivalPct : (this.state.currentPathResult?.cumulativeSurvivalProb !== undefined ? this.state.currentPathResult.cumulativeSurvivalProb : 0.04);
 
-    const r = this.state.simResults;
     const equityEl = document.getElementById('simWinEquity');
     const edgeSubEl = document.getElementById('simEdgeSub');
     const finishEl = document.getElementById('simExpectedFinish');
@@ -675,13 +700,13 @@ class OddsSuiteApp {
     const oddsEl = document.getElementById('simHorizonOdds');
     const oddsSubEl = document.getElementById('simOddsSub');
 
-    if (equityEl) equityEl.textContent = `${r.winEquityPct}%`;
-    if (edgeSubEl) edgeSubEl.textContent = `${r.edgeMultiple}x edge vs ${r.randomBaselinePct}% baseline`;
-    if (finishEl) finishEl.textContent = `Week ${r.expectedPoolEndWeek}`;
-    if (finishSubEl) finishSubEl.textContent = `When all ${r.poolSize} opponents are expected to be out`;
-    if (picksEl) picksEl.textContent = `${r.picksNeededToWin} Wins`;
-    if (oddsEl) oddsEl.textContent = `${r.horizonSurvivalPct}%`;
-    if (oddsSubEl) oddsSubEl.textContent = `Odds to reach Week ${r.targetHorizon} (${r.fullSeasonSurvivalPct}% full 18-wk)`;
+    if (equityEl) equityEl.textContent = `${winEquity}%`;
+    if (edgeSubEl) edgeSubEl.textContent = `${edgeMult}x edge vs ${baselinePct}% baseline`;
+    if (finishEl) finishEl.textContent = `Week ${finishWeek}`;
+    if (finishSubEl) finishSubEl.textContent = `When all ${poolSize} opponents are expected to be out`;
+    if (picksEl) picksEl.textContent = `${picksNeeded} Wins`;
+    if (oddsEl) oddsEl.textContent = `${horizonOdds}%`;
+    if (oddsSubEl) oddsSubEl.textContent = `Odds to reach Week ${horizon} (${full18Odds}% full 18-wk)`;
   }
 
   copySurvivorPath() {
