@@ -4,10 +4,10 @@
  */
 
 self.onmessage = function(e) {
-  const { path: userPath, slateData, poolSize = 100, iterations = 10000 } = e.data;
+  const { path: userPath, slateData, poolSize = 100, iterations = 10000, targetHorizon = 11 } = e.data;
 
   try {
-    const results = runMonteCarloSimulation(userPath, slateData, poolSize, iterations, (pct) => {
+    const results = runMonteCarloSimulation(userPath, slateData, poolSize, iterations, targetHorizon, (pct) => {
       self.postMessage({ type: 'progress', percent: pct });
     });
     self.postMessage({ type: 'complete', results });
@@ -16,7 +16,7 @@ self.onmessage = function(e) {
   }
 };
 
-function runMonteCarloSimulation(userPath, slateData, poolSize, iterations, progressCb) {
+function runMonteCarloSimulation(userPath, slateData, poolSize, iterations, targetHorizon, progressCb) {
   const userPicksByWeek = {};
   userPath.forEach(p => {
     userPicksByWeek[p.week] = p.teamCode;
@@ -26,17 +26,10 @@ function runMonteCarloSimulation(userPath, slateData, poolSize, iterations, prog
   const numOpponents = totalPoolSize - 1;
 
   let totalWinEquity = 0;
-  let soloWins = 0;
-  let splitWins = 0;
+  let userSurvivedHorizon = 0;
   let userSurvived18 = 0;
 
-  const eliminationWeeksCount = {};
-  for (let w = 1; w <= 18; w++) eliminationWeeksCount[w] = 0;
-  eliminationWeeksCount['survived'] = 0;
-
-  const weekUserAliveCount = new Array(19).fill(0);
-  const weekOpponentsAvgSum = new Array(19).fill(0);
-
+  const poolEndWeeks = [];
   const reportInterval = Math.max(500, Math.floor(iterations / 20));
 
   for (let iter = 1; iter <= iterations; iter++) {
@@ -46,15 +39,10 @@ function runMonteCarloSimulation(userPath, slateData, poolSize, iterations, prog
 
     let userAlive = true;
     let opponentsAlive = numOpponents;
-    let userElimWeek = null;
-    let poolEndedWeek = null;
-    let userWonSolo = false;
-    let userSplitPot = false;
+    let poolFinishWeek = 18;
+    let poolEndedEarly = false;
 
     for (let w = 1; w <= 18; w++) {
-      if (userAlive) weekUserAliveCount[w]++;
-      weekOpponentsAvgSum[w] += opponentsAlive;
-
       const weekData = slateData.find(s => s.week === w);
       if (!weekData) continue;
 
@@ -91,27 +79,27 @@ function runMonteCarloSimulation(userPath, slateData, poolSize, iterations, prog
         }
       }
 
-      // 4. Resolve week outcomes
+      // Check if user survived through the designated target horizon
+      if (w === targetHorizon && userAlive && userSurvivesThisWeek) {
+        userSurvivedHorizon++;
+      }
+
+      // 4. Resolve week outcomes & pool termination
       if (userAlive && !userSurvivesThisWeek) {
-        // User died this week
         userAlive = false;
-        userElimWeek = w;
         if (survivingOpponents === 0 && opponentsAlive > 0) {
-          // Everyone died in this same week: split pot among week's survivors!
-          const tiedWinners = 1 + opponentsAlive;
-          totalWinEquity += (1 / tiedWinners);
-          userSplitPot = true;
-          poolEndedWeek = w;
+          // Everyone died in this same week: split pot
+          totalWinEquity += (1 / (1 + opponentsAlive));
+          poolFinishWeek = w;
+          poolEndedEarly = true;
           break;
         }
       } else if (userAlive && userSurvivesThisWeek) {
-        // User survived this week!
         if (survivingOpponents === 0) {
-          // ALL opponents eliminated! User WINS SOLO in week w!
-          soloWins++;
+          // User solo win!
           totalWinEquity += 1.0;
-          userWonSolo = true;
-          poolEndedWeek = w;
+          poolFinishWeek = w;
+          poolEndedEarly = true;
           break;
         }
       }
@@ -119,48 +107,46 @@ function runMonteCarloSimulation(userPath, slateData, poolSize, iterations, prog
       opponentsAlive = survivingOpponents;
 
       if (!userAlive && opponentsAlive === 0) {
-        break; // Pool ended
+        poolFinishWeek = w;
+        poolEndedEarly = true;
+        break;
       }
     }
 
-    // Record iteration stats
-    if (userWonSolo) {
-      eliminationWeeksCount[poolEndedWeek || 18]++;
-    } else if (userSplitPot) {
-      splitWins++;
-      eliminationWeeksCount[poolEndedWeek || 18]++;
-    } else if (userAlive) {
-      userSurvived18++;
-      eliminationWeeksCount['survived']++;
-      const totalWinners = 1 + opponentsAlive;
-      totalWinEquity += (1 / totalWinners);
-      if (opponentsAlive === 0) soloWins++;
-      else splitWins++;
-    } else {
-      eliminationWeeksCount[userElimWeek || 18]++;
+    if (!poolEndedEarly) {
+      poolFinishWeek = 18;
+      if (userAlive) {
+        userSurvived18++;
+        totalWinEquity += (1 / (1 + opponentsAlive));
+      }
     }
+
+    poolEndWeeks.push(poolFinishWeek);
   }
 
-  // Calculate final statistics
+  // Calculate stats
+  poolEndWeeks.sort((a, b) => a - b);
+  const medianPoolEnd = poolEndWeeks[Math.floor(poolEndWeeks.length / 2)];
+  const avgPoolEnd = Number((poolEndWeeks.reduce((a, b) => a + b, 0) / iterations).toFixed(1));
+
   const winEquityPct = Number(((totalWinEquity / iterations) * 100).toFixed(2));
-  const soloWinPct = Number(((soloWins / iterations) * 100).toFixed(2));
-  const splitWinPct = Number(((splitWins / iterations) * 100).toFixed(2));
-  const fullSeasonSurvivalPct = Number(((userSurvived18 / iterations) * 100).toFixed(2));
+  const randomBaselinePct = Number(((1 / totalPoolSize) * 100).toFixed(2));
+  const edgeMultiple = Number((winEquityPct / Math.max(0.001, randomBaselinePct)).toFixed(1));
 
-  let totalWeeksSum = 0;
-  for (let w = 1; w <= 18; w++) {
-    totalWeeksSum += eliminationWeeksCount[w] * w;
-  }
-  totalWeeksSum += eliminationWeeksCount['survived'] * 18;
-  const expectedElimWeek = Number((totalWeeksSum / iterations).toFixed(1));
+  const horizonSurvivalPct = Number(((userSurvivedHorizon / iterations) * 100).toFixed(1));
+  const fullSeasonSurvivalPct = Number(((userSurvived18 / iterations) * 100).toFixed(2));
 
   return {
     iterations,
     poolSize: totalPoolSize,
     winEquityPct,
-    expectedElimWeek,
-    soloWinPct,
-    splitWinPct,
-    fullSeasonSurvivalPct
+    randomBaselinePct,
+    edgeMultiple,
+    expectedPoolEndWeek: avgPoolEnd,
+    medianPoolEndWeek: medianPoolEnd,
+    picksNeededToWin: Math.round(avgPoolEnd),
+    horizonSurvivalPct,
+    fullSeasonSurvivalPct,
+    targetHorizon
   };
 }

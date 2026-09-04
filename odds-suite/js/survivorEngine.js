@@ -9,6 +9,20 @@ export class SurvivorEngine {
   }
 
   /**
+   * Calculate Expected Pool Finish Week based on pool size
+   * Small pools end early (W7-9), mid pools end W10-13, mega pools end W16-18
+   */
+  estimatePoolFinishWeek(poolSize = 100) {
+    const n = Math.max(2, Number(poolSize) || 100);
+    // Average weekly survivor retention rate is ~70-74% across national chalk
+    const avgRetention = 0.72;
+    // N * (avgRetention)^W <= 1 => W = ln(N) / -ln(avgRetention)
+    const rawWeeks = Math.log(n) / -Math.log(avgRetention);
+    const finishWeek = Math.min(18, Math.max(5, Math.round(rawWeeks) + 1));
+    return finishWeek;
+  }
+
+  /**
    * Expected Value (EV) calculation against pool size
    * Formula: EV = (pWin / max(0.01, pickShare)) * (1 - (1 - pWin)^poolSize)
    */
@@ -25,10 +39,13 @@ export class SurvivorEngine {
   /**
    * Future Value (FV) heuristic:
    * Sum of team's future win probabilities in games where P(Win) >= 65%
+   * Only looks ahead up to the target horizon week (no wasted rationing)!
    */
-  calculateFutureValue(teamCode, fromWeek, slateData) {
+  calculateFutureValue(teamCode, fromWeek, slateData, targetHorizon = 18) {
     let fv = 0;
-    for (let w = fromWeek + 1; w <= 18; w++) {
+    const maxWeek = Math.min(18, Number(targetHorizon) || 18);
+
+    for (let w = fromWeek + 1; w <= maxWeek; w++) {
       const weekData = slateData.find(s => s.week === w);
       if (!weekData || (weekData.byes && weekData.byes.includes(teamCode))) continue;
 
@@ -82,24 +99,25 @@ export class SurvivorEngine {
   }
 
   /**
-   * 18-Week Optimal Path Finder (Dynamic Programming Lookahead)
-   * Enforces single-elimination (each team max once), user locks, and exclusions.
+   * 18-Week Optimal Path Finder (Horizon-Constrained & Dynamic Lookahead)
    */
   findOptimal18WeekPath(slateData, options = {}) {
     const poolSize = Math.max(10, Number(options.poolSize) || 100);
     const strategy = options.strategy || 'contrarian'; // 'survival' | 'contrarian'
-    const lockedPicks = options.lockedPicks || {}; // { [week]: teamCode }
+    const pathTarget = options.pathTarget || 'horizon'; // 'horizon' | 'full_season'
+    const targetHorizon = pathTarget === 'horizon' ? this.estimatePoolFinishWeek(poolSize) : 18;
+    const lockedPicks = options.lockedPicks || {};
     const excludedTeams = new Set(options.excludedTeams || []);
 
     const usedTeams = new Set();
     const path = [];
 
-    // Pre-populate locked picks so we don't accidentally reuse locked teams in earlier weeks
     Object.entries(lockedPicks).forEach(([w, team]) => {
       if (team) usedTeams.add(team);
     });
 
     let cumulativeSurvival = 1.0;
+    let horizonSurvival = 1.0;
 
     for (let w = 1; w <= 18; w++) {
       const weekData = slateData.find(s => s.week === w);
@@ -111,15 +129,17 @@ export class SurvivorEngine {
         const game = this.getTeamGame(lockedTeam, w, slateData);
         if (game && !game.isBye) {
           const ev = this.calculateEV(game.winProb, game.pickPct, poolSize);
-          const fv = this.calculateFutureValue(lockedTeam, w, slateData);
+          const fv = this.calculateFutureValue(lockedTeam, w, slateData, targetHorizon);
           cumulativeSurvival *= game.winProb;
+          if (w <= targetHorizon) horizonSurvival *= game.winProb;
 
           path.push({
             ...game,
             ev,
             futureValue: fv,
             isLocked: true,
-            cumulativeProb: Number((cumulativeSurvival * 100).toFixed(2))
+            cumulativeProb: Number((cumulativeSurvival * 100).toFixed(2)),
+            isBeyondHorizon: w > targetHorizon
           });
           continue;
         }
@@ -128,10 +148,10 @@ export class SurvivorEngine {
       // 2. Evaluate all available candidate teams for this week
       const candidates = [];
       weekData.games.forEach(g => {
-        // Evaluate Home Team
+        // Home Team
         if (!usedTeams.has(g.homeTeam) && !excludedTeams.has(g.homeTeam)) {
           const ev = this.calculateEV(g.homeWinProb, g.homePickPct, poolSize);
-          const fv = this.calculateFutureValue(g.homeTeam, w, slateData);
+          const fv = this.calculateFutureValue(g.homeTeam, w, slateData, targetHorizon);
           candidates.push({
             teamCode: g.homeTeam,
             teamName: g.homeTeamName,
@@ -147,10 +167,10 @@ export class SurvivorEngine {
           });
         }
 
-        // Evaluate Away Team
+        // Away Team
         if (!usedTeams.has(g.awayTeam) && !excludedTeams.has(g.awayTeam)) {
           const ev = this.calculateEV(g.awayWinProb, g.awayPickPct, poolSize);
-          const fv = this.calculateFutureValue(g.awayTeam, w, slateData);
+          const fv = this.calculateFutureValue(g.awayTeam, w, slateData, targetHorizon);
           candidates.push({
             teamCode: g.awayTeam,
             teamName: g.awayTeamName,
@@ -178,7 +198,8 @@ export class SurvivorEngine {
           ev: 0,
           futureValue: 0,
           isLocked: false,
-          cumulativeProb: Number((cumulativeSurvival * 100).toFixed(2))
+          cumulativeProb: Number((cumulativeSurvival * 100).toFixed(2)),
+          isBeyondHorizon: w > targetHorizon
         });
         continue;
       }
@@ -188,18 +209,18 @@ export class SurvivorEngine {
       if (eligible.length === 0) eligible = candidates.filter(c => c.winProb >= 0.50);
       if (eligible.length === 0) eligible = candidates;
 
-      // Score candidates based on strategy & future lookahead
+      // Score candidates based on strategy & future lookahead up to horizon
       eligible.forEach(cand => {
         const logProb = Math.log(cand.winProb);
         const logEv = Math.log(Math.max(0.1, cand.ev));
 
+        // Future Value penalty drops to 0 once we pass the target horizon!
+        const isPastHorizon = w >= targetHorizon;
+        const fvPenalty = isPastHorizon ? 0 : (w <= 6 ? 0.06 : 0.03);
+
         if (strategy === 'survival') {
-          // Pure survival: heavily prioritize raw win probability, penalize burning future value early
-          const fvPenalty = w <= 6 ? 0.08 : (w <= 13 ? 0.04 : 0.01);
-          cand.score = logProb + (0.12 * logEv) - (fvPenalty * cand.futureValue);
+          cand.score = logProb + (0.10 * logEv) - (fvPenalty * cand.futureValue);
         } else {
-          // Contrarian: Leverage EV bonus is stronger, rewarding pivot favorites against heavy chalk
-          const fvPenalty = w <= 6 ? 0.05 : 0.02;
           const evWeight = poolSize >= 500 ? 0.45 : (poolSize >= 100 ? 0.35 : 0.22);
           cand.score = logProb + (evWeight * logEv) - (fvPenalty * cand.futureValue);
         }
@@ -210,17 +231,22 @@ export class SurvivorEngine {
 
       usedTeams.add(chosen.teamCode);
       cumulativeSurvival *= chosen.winProb;
+      if (w <= targetHorizon) horizonSurvival *= chosen.winProb;
 
       path.push({
         week: w,
         ...chosen,
         isLocked: false,
-        cumulativeProb: Number((cumulativeSurvival * 100).toFixed(2))
+        cumulativeProb: Number((cumulativeSurvival * 100).toFixed(2)),
+        isBeyondHorizon: w > targetHorizon
       });
     }
 
     return {
       path,
+      targetHorizon,
+      pathTarget,
+      horizonSurvivalProb: Number((horizonSurvival * 100).toFixed(2)),
       cumulativeSurvivalProb: Number((cumulativeSurvival * 100).toFixed(2)),
       strategy,
       poolSize
@@ -229,10 +255,10 @@ export class SurvivorEngine {
 
   /**
    * Weekly Recommendation Spotlight Card Generator
-   * Categorizes picks into Top Leverage, Chalk, and Trap Pick for active week.
    */
   categorizeWeeklyPicks(week, slateData, options = {}) {
     const poolSize = Math.max(10, Number(options.poolSize) || 100);
+    const targetHorizon = options.targetHorizon || 18;
     const weekData = slateData.find(s => s.week === week);
     if (!weekData) return { leverage: null, chalk: null, trap: null, all: [] };
 
@@ -240,7 +266,7 @@ export class SurvivorEngine {
     weekData.games.forEach(g => {
       // Home Team
       const homeEv = this.calculateEV(g.homeWinProb, g.homePickPct, poolSize);
-      const homeFv = this.calculateFutureValue(g.homeTeam, week, slateData);
+      const homeFv = this.calculateFutureValue(g.homeTeam, week, slateData, targetHorizon);
       picks.push({
         id: `${g.id}_home`,
         teamCode: g.homeTeam,
@@ -258,7 +284,7 @@ export class SurvivorEngine {
 
       // Away Team
       const awayEv = this.calculateEV(g.awayWinProb, g.awayPickPct, poolSize);
-      const awayFv = this.calculateFutureValue(g.awayTeam, week, slateData);
+      const awayFv = this.calculateFutureValue(g.awayTeam, week, slateData, targetHorizon);
       picks.push({
         id: `${g.id}_away`,
         teamCode: g.awayTeam,
@@ -275,21 +301,17 @@ export class SurvivorEngine {
       });
     });
 
-    // 1. Chalk Pick: Highest raw win probability on the slate
     const chalkPicks = [...picks].sort((a, b) => b.winProb - a.winProb);
     const chalk = chalkPicks[0] || null;
 
-    // 2. Top Leverage Pick: High EV with solid win prob (>= 58%) and lower pick share
     const leverageCandidates = picks.filter(p => p.winProb >= 0.58 && p.pickPct <= 0.22 && p.teamCode !== (chalk ? chalk.teamCode : ''));
     leverageCandidates.sort((a, b) => b.ev - a.ev);
     const leverage = leverageCandidates[0] || [...picks].sort((a, b) => b.ev - a.ev)[0];
 
-    // 3. Trap Pick: High pick share (> 8%) where win probability is vulnerable (< 70%) or EV is discounted
     const trapCandidates = picks.filter(p => p.pickPct >= 0.06 && p.teamCode !== (chalk ? chalk.teamCode : ''));
     trapCandidates.sort((a, b) => (b.pickPct / Math.max(0.40, b.winProb)) - (a.pickPct / Math.max(0.40, a.winProb)));
     const trap = trapCandidates[0] || null;
 
-    // Sort all picks by EV descending
     picks.sort((a, b) => b.ev - a.ev);
 
     return {
@@ -302,8 +324,7 @@ export class SurvivorEngine {
   }
 
   /**
-   * Pick'em Confidence Mode:
-   * Rank all weekly games by win probability and assign 16 down to 1 points.
+   * Pick'em Confidence Mode
    */
   generatePickemConfidence(week, slateData) {
     const weekData = slateData.find(s => s.week === week);
@@ -354,16 +375,19 @@ export class SurvivorEngine {
     if (!result || !result.path) return '';
     const poolSize = options.poolSize || result.poolSize || 100;
     const stratName = (result.strategy === 'survival' ? 'Max Survival' : 'Contrarian Leverage');
+    const horizon = result.targetHorizon || 18;
 
-    let text = `🐾 SCOUT BOWIE 18-WEEK SURVIVOR OPTIMAL PATH\n`;
-    text += `Strategy: ${stratName} | Pool Size: ${poolSize} Entries | Est. Survival: ${result.cumulativeSurvivalProb}%\n`;
+    let text = `🐾 SCOUT BOWIE SURVIVOR OPTIMAL PATH\n`;
+    text += `Strategy: ${stratName} | Pool Size: ${poolSize} Entries\n`;
+    text += `🎯 Expected Pool Finish: Week ${horizon} (Odds to Finish: ${result.horizonSurvivalProb}%)\n`;
     text += `------------------------------------------------------------\n`;
 
     result.path.forEach(p => {
       const loc = p.isHome ? 'vs' : '@';
       const spreadStr = p.spread < 0 ? `${p.spread}` : `+${p.spread}`;
       const lockMark = p.isLocked ? ' 🔒[LOCKED]' : '';
-      text += `Week ${String(p.week).padEnd(2)}: ${p.teamCode.padEnd(4)} (${loc} ${p.oppCode}) [${spreadStr}, Win: ${(p.winProb*100).toFixed(0)}%, EV: ${p.ev}]${lockMark}\n`;
+      const finishMark = p.week === horizon ? ' 🏁[EXPECTED POOL FINISH]' : '';
+      text += `Week ${String(p.week).padEnd(2)}: ${p.teamCode.padEnd(4)} (${loc} ${p.oppCode}) [${spreadStr}, Win: ${(p.winProb*100).toFixed(0)}%, EV: ${p.ev}]${lockMark}${finishMark}\n`;
     });
 
     text += `------------------------------------------------------------\n`;
@@ -371,9 +395,6 @@ export class SurvivorEngine {
     return text;
   }
 
-  /**
-   * Format Pick'em Confidence sheet for clipboard export
-   */
   formatClipboardPickem(confidenceList, week) {
     if (!confidenceList || confidenceList.length === 0) return '';
     let text = `🐾 SCOUT BOWIE WEEK ${week} NFL PICK'EM CONFIDENCE SHEET\n`;

@@ -13,6 +13,7 @@ class OddsSuiteApp {
       activeWeek: 1,
       poolSize: 100,
       strategy: 'contrarian', // 'survival' | 'contrarian'
+      pathTarget: 'horizon', // 'horizon' | 'full_season'
       currentView: 'survivor', // 'survivor' | 'pickem' | 'parlay'
       lockedPicks: {}, // { [week]: teamCode }
       excludedTeams: new Set(),
@@ -70,6 +71,7 @@ class OddsSuiteApp {
   bindGlobalHandlers() {
     window.onPoolSizeInput = (val) => this.onPoolSizeInput(val);
     window.onStrategySelect = (strat) => this.onStrategySelect(strat);
+    window.onPathTargetSelect = (target) => this.onPathTargetSelect(target);
     window.onWeekSelect = (week) => this.onWeekSelect(week);
     window.switchView = (view) => this.switchView(view);
     window.toggleLockPick = (week, teamCode) => this.toggleLockPick(week, teamCode);
@@ -105,6 +107,19 @@ class OddsSuiteApp {
     document.querySelectorAll('.strategy-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.strategy === strat);
     });
+
+    this.recalculateAll();
+    this.renderAll();
+    this.runMonteCarloSim();
+  }
+
+  onPathTargetSelect(target) {
+    this.state.pathTarget = target;
+    const horizonBtn = document.getElementById('targetHorizonBtn');
+    const fullBtn = document.getElementById('targetFullBtn');
+
+    if (horizonBtn) horizonBtn.classList.toggle('active', target === 'horizon');
+    if (fullBtn) fullBtn.classList.toggle('active', target === 'full_season');
 
     this.recalculateAll();
     this.renderAll();
@@ -189,16 +204,25 @@ class OddsSuiteApp {
     this.state.currentPathResult = this.engine.findOptimal18WeekPath(this.state.slateData, {
       poolSize: this.state.poolSize,
       strategy: this.state.strategy,
+      pathTarget: this.state.pathTarget,
       lockedPicks: this.state.lockedPicks,
       excludedTeams: Array.from(this.state.excludedTeams)
     });
+
+    const horizonWeek = this.state.currentPathResult.targetHorizon;
+    const horizonBtn = document.getElementById('targetHorizonBtn');
+    if (horizonBtn) {
+      horizonBtn.innerHTML = `<span>🎯 Target: Pool Finish (W${horizonWeek})</span>`;
+    }
 
     this.recalculateWeeklyViews();
   }
 
   recalculateWeeklyViews() {
+    const horizon = this.state.currentPathResult?.targetHorizon || 18;
     this.state.weeklySpotlight = this.engine.categorizeWeeklyPicks(this.state.activeWeek, this.state.slateData, {
-      poolSize: this.state.poolSize
+      poolSize: this.state.poolSize,
+      targetHorizon: horizon
     });
 
     this.state.pickemConfidence = this.engine.generatePickemConfidence(this.state.activeWeek, this.state.slateData);
@@ -214,12 +238,15 @@ class OddsSuiteApp {
       simBtn.disabled = true;
     }
 
+    const horizon = this.state.currentPathResult.targetHorizon || 11;
+
     if (this.worker) {
       this.worker.postMessage({
         path: this.state.currentPathResult.path,
         slateData: this.state.slateData,
         poolSize: this.state.poolSize,
-        iterations: 10000
+        iterations: 10000,
+        targetHorizon: horizon
       });
     } else {
       setTimeout(() => {
@@ -227,7 +254,8 @@ class OddsSuiteApp {
           this.state.currentPathResult.path,
           this.state.slateData,
           this.state.poolSize,
-          10000
+          10000,
+          horizon
         );
         this.state.simResults = results;
         this.state.isSimulating = false;
@@ -236,27 +264,22 @@ class OddsSuiteApp {
     }
   }
 
-  runSyncFallbackSim(userPath, slateData, poolSize, iterations) {
+  runSyncFallbackSim(userPath, slateData, poolSize, iterations, targetHorizon) {
     const userPicksByWeek = {};
     userPath.forEach(p => { userPicksByWeek[p.week] = p.teamCode; });
     const totalPoolSize = Math.max(2, Math.min(10000, Number(poolSize) || 100));
     const numOpponents = totalPoolSize - 1;
 
     let totalWinEquity = 0;
-    let soloWins = 0;
-    let splitWins = 0;
+    let userSurvivedHorizon = 0;
     let userSurvived18 = 0;
-    const eliminationWeeksCount = {};
-    for (let w = 1; w <= 18; w++) eliminationWeeksCount[w] = 0;
-    eliminationWeeksCount['survived'] = 0;
+    const poolEndWeeks = [];
 
     for (let iter = 1; iter <= iterations; iter++) {
       let userAlive = true;
       let opponentsAlive = numOpponents;
-      let userElimWeek = null;
-      let poolEndedWeek = null;
-      let userWonSolo = false;
-      let userSplitPot = false;
+      let poolFinishWeek = 18;
+      let poolEndedEarly = false;
 
       for (let w = 1; w <= 18; w++) {
         const weekData = slateData.find(s => s.week === w);
@@ -288,57 +311,62 @@ class OddsSuiteApp {
           }
         }
 
+        if (w === targetHorizon && userAlive && userSurvivesThisWeek) {
+          userSurvivedHorizon++;
+        }
+
         if (userAlive && !userSurvivesThisWeek) {
           userAlive = false;
-          userElimWeek = w;
           if (survivingOpponents === 0 && opponentsAlive > 0) {
             totalWinEquity += (1 / (1 + opponentsAlive));
-            userSplitPot = true;
-            poolEndedWeek = w;
+            poolFinishWeek = w;
+            poolEndedEarly = true;
             break;
           }
         } else if (userAlive && userSurvivesThisWeek) {
           if (survivingOpponents === 0) {
-            soloWins++;
             totalWinEquity += 1.0;
-            userWonSolo = true;
-            poolEndedWeek = w;
+            poolFinishWeek = w;
+            poolEndedEarly = true;
             break;
           }
         }
 
         opponentsAlive = survivingOpponents;
-        if (!userAlive && opponentsAlive === 0) break;
+        if (!userAlive && opponentsAlive === 0) {
+          poolFinishWeek = w;
+          poolEndedEarly = true;
+          break;
+        }
       }
 
-      if (userWonSolo) {
-        eliminationWeeksCount[poolEndedWeek || 18]++;
-      } else if (userSplitPot) {
-        splitWins++;
-        eliminationWeeksCount[poolEndedWeek || 18]++;
-      } else if (userAlive) {
-        userSurvived18++;
-        eliminationWeeksCount['survived']++;
-        totalWinEquity += (1 / (1 + opponentsAlive));
-        if (opponentsAlive === 0) soloWins++;
-        else splitWins++;
-      } else {
-        eliminationWeeksCount[userElimWeek || 18]++;
+      if (!poolEndedEarly) {
+        poolFinishWeek = 18;
+        if (userAlive) {
+          userSurvived18++;
+          totalWinEquity += (1 / (1 + opponentsAlive));
+        }
       }
+
+      poolEndWeeks.push(poolFinishWeek);
     }
 
-    let totalWeeksSum = 0;
-    for (let w = 1; w <= 18; w++) totalWeeksSum += eliminationWeeksCount[w] * w;
-    totalWeeksSum += eliminationWeeksCount['survived'] * 18;
+    const avgPoolEnd = Number((poolEndWeeks.reduce((a, b) => a + b, 0) / iterations).toFixed(1));
+    const winEquityPct = Number(((totalWinEquity / iterations) * 100).toFixed(2));
+    const randomBaselinePct = Number(((1 / totalPoolSize) * 100).toFixed(2));
+    const edgeMultiple = Number((winEquityPct / Math.max(0.001, randomBaselinePct)).toFixed(1));
 
     return {
       iterations,
       poolSize: totalPoolSize,
-      winEquityPct: Number(((totalWinEquity / iterations) * 100).toFixed(2)),
-      expectedElimWeek: Number((totalWeeksSum / iterations).toFixed(1)),
-      soloWinPct: Number(((soloWins / iterations) * 100).toFixed(2)),
-      splitWinPct: Number(((splitWins / iterations) * 100).toFixed(2)),
-      fullSeasonSurvivalPct: Number(((userSurvived18 / iterations) * 100).toFixed(2))
+      winEquityPct,
+      randomBaselinePct,
+      edgeMultiple,
+      expectedPoolEndWeek: avgPoolEnd,
+      picksNeededToWin: Math.round(avgPoolEnd),
+      horizonSurvivalPct: Number(((userSurvivedHorizon / iterations) * 100).toFixed(1)),
+      fullSeasonSurvivalPct: Number(((userSurvived18 / iterations) * 100).toFixed(2)),
+      targetHorizon
     };
   }
 
@@ -362,14 +390,15 @@ class OddsSuiteApp {
     if (!adviceEl) return;
 
     const size = this.state.poolSize;
+    const horizon = this.state.currentPathResult?.targetHorizon || 11;
     let text = '';
 
     if (size <= 40) {
-      text = `"In an office pool of ${size} entries, pick chalk favorites and let your opponents eliminate themselves on risky fliers. Don't overthink leverage early." 🐾`;
+      text = `"In a ${size}-person pool, the field is expected to be wiped out by Week ${horizon}. Don't save elite teams for December—deploy them now!" 🐾`;
     } else if (size <= 300) {
-      text = `"In a ${size}-entry contest, look for 1 or 2 high-EV leverage pivots to dodge massive national chalk traps while reserving top tier teams for bye-heavy weeks." 🦴`;
+      text = `"In a ${size}-entry pool, aim for Week ${horizon}. Look for 1 or 2 high-EV leverage pivots while reserving top tier teams for the Week ${horizon} finish line." 🦴`;
     } else {
-      text = `"In a massive ${size.toLocaleString()}-entry mega pool, you MUST generate negative correlation against 30%+ national chalk to maximize your solo win equity." 🚀`;
+      text = `"In a massive ${size.toLocaleString()}-entry contest, the pool will likely last through Week 17–18. Fade heavy 30%+ national chalk to maximize your solo equity!" 🚀`;
     }
 
     adviceEl.textContent = text;
@@ -523,9 +552,12 @@ class OddsSuiteApp {
     const tableBody = document.getElementById('matrixBody');
     if (!headerRow || !tableBody || !this.state.slateData) return;
 
+    const horizonWeek = this.state.currentPathResult?.targetHorizon || 11;
+
     let headersHtml = '<th class="team-col">TEAM</th>';
     for (let w = 1; w <= 18; w++) {
-      headersHtml += `<th>W${w}</th>`;
+      const isFinishCol = w === horizonWeek;
+      headersHtml += `<th class="${isFinishCol ? 'matrix-finish-header' : ''}" title="${isFinishCol ? 'Expected Pool Finish Line (Week ' + w + ')' : 'Week ' + w}">W${w}</th>`;
     }
     headerRow.innerHTML = headersHtml;
 
@@ -548,8 +580,11 @@ class OddsSuiteApp {
 
       for (let w = 1; w <= 18; w++) {
         const game = this.engine.getTeamGame(team, w, this.state.slateData);
+        const isFinishCol = w === horizonWeek;
+        const isBeyond = w > horizonWeek;
+
         if (!game || game.isBye) {
-          rowHtml += `<td class="cell-bye" title="${team} Bye Week">—</td>`;
+          rowHtml += `<td class="cell-bye ${isFinishCol ? 'matrix-finish-col' : ''}" title="${team} Bye Week">—</td>`;
           continue;
         }
 
@@ -563,9 +598,11 @@ class OddsSuiteApp {
         else if (prob < 0.45) cellClass = 'cell-dog';
 
         if (isPicked) cellClass += isLocked ? ' cell-locked' : ' cell-picked';
+        if (isFinishCol) cellClass += ' matrix-finish-col';
+        if (isBeyond && !isPicked) cellClass += ' cell-beyond-horizon';
 
         const loc = game.isHome ? 'vs' : '@';
-        const titleText = `Week ${w}: ${team} ${loc} ${game.oppCode} (${(prob*100).toFixed(0)}% win odds, EV: ${this.engine.calculateEV(prob, game.pickPct, this.state.poolSize)})`;
+        const titleText = `Week ${w}: ${team} ${loc} ${game.oppCode} (${(prob*100).toFixed(0)}% win odds, EV: ${this.engine.calculateEV(prob, game.pickPct, this.state.poolSize)})${isFinishCol ? ' 🏁 [EXPECTED POOL FINISH]' : ''}`;
 
         rowHtml += `
           <td class="${cellClass}" title="${titleText}" onclick="toggleLockPick(${w}, '${team}')" style="cursor:pointer;">
@@ -631,14 +668,20 @@ class OddsSuiteApp {
 
     const r = this.state.simResults;
     const equityEl = document.getElementById('simWinEquity');
-    const elimEl = document.getElementById('simExpectedElim');
-    const soloEl = document.getElementById('simSoloWin');
-    const splitEl = document.getElementById('simSplitWin');
+    const edgeSubEl = document.getElementById('simEdgeSub');
+    const finishEl = document.getElementById('simExpectedFinish');
+    const finishSubEl = document.getElementById('simFinishSub');
+    const picksEl = document.getElementById('simPicksNeeded');
+    const oddsEl = document.getElementById('simHorizonOdds');
+    const oddsSubEl = document.getElementById('simOddsSub');
 
     if (equityEl) equityEl.textContent = `${r.winEquityPct}%`;
-    if (elimEl) elimEl.textContent = `Week ${r.expectedElimWeek}`;
-    if (soloEl) soloEl.textContent = `${r.soloWinPct}%`;
-    if (splitEl) splitEl.textContent = `${r.splitWinPct}%`;
+    if (edgeSubEl) edgeSubEl.textContent = `${r.edgeMultiple}x edge vs ${r.randomBaselinePct}% baseline`;
+    if (finishEl) finishEl.textContent = `Week ${r.expectedPoolEndWeek}`;
+    if (finishSubEl) finishSubEl.textContent = `When all ${r.poolSize} opponents are expected to be out`;
+    if (picksEl) picksEl.textContent = `${r.picksNeededToWin} Wins`;
+    if (oddsEl) oddsEl.textContent = `${r.horizonSurvivalPct}%`;
+    if (oddsSubEl) oddsSubEl.textContent = `Odds to reach Week ${r.targetHorizon} (${r.fullSeasonSurvivalPct}% full 18-wk)`;
   }
 
   copySurvivorPath() {
@@ -649,7 +692,7 @@ class OddsSuiteApp {
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {
-        this.showToast('📋 Copied 18-Week Survivor Path to clipboard! 🐾');
+        this.showToast('📋 Copied Optimal Survivor Path to clipboard! 🐾');
       }).catch(() => {
         this.showToast('Copied path to clipboard!');
       });
@@ -678,7 +721,7 @@ class OddsSuiteApp {
       "Woof! Math never lies — always fade the consensus trap!",
       "10,000 simulations completed in milliseconds. Golden bones for all!",
       "Survivor is a game of survival AND leverage. Play to win the whole pool!",
-      "Bark! Trust the Brownian bridge and Vegas implied win totals."
+      "Bark! Don't save elite teams for December if your pool ends in October."
     ];
     const q = barkQuotes[Math.floor(Math.random() * barkQuotes.length)];
     this.showToast(q);
