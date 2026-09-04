@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NFL Survivor & Pick'em Optimizer | Scout Bowie Analytics Suite</title>
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- OpenGraph / Social Metadata -->
+  <meta property="og:title" content="NFL Survivor & Pick'em Optimizer | Scout Bowie Analytics Suite">
+  <meta property="og:description" content="100% client-side NFL survivor pathfinder, 10,000-run Monte Carlo pool simulator, and confidence ranker powered by Scout Bowie.">
+  <meta property="og:image" content="../assets/scout-bowie.webp">
+  <meta name="twitter:card" content="summary_large_image">
+</head>
+<body>
+
+  <!-- Suite Navigation Bar -->
+  <div class="suite-nav">
+    <a href="../index.html" class="suite-nav-brand">
+      <span>⚡ SLEEPER ANALYTICS SUITE</span>
+      <span style="color:var(--muted);font-weight:400;">•</span>
+      <span style="color:#fff;font-weight:700;">Odds & Survivor Suite</span>
+    </a>
+    <div class="suite-nav-links">
+      <a href="../index.html" class="suite-nav-link">◄ Portal Home</a>
+      <a href="../draft/index.html" class="suite-nav-link" style="color:var(--cyan);border-color:rgba(0,229,255,0.4);">Draft War Room ➔</a>
+      <a href="../weekly/index.html" class="suite-nav-link" style="color:var(--accent);border-color:rgba(16,185,129,0.4);">Weekly Optimizer ➔</a>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- Scout Bowie Mascot Header Card -->
+    <div class="bowie-header-card">
+      <div class="bowie-avatar-wrap" onclick="triggerBowieEasterEgg(this.querySelector('img'))" title="Click Bowie for tactical barking tips!">
+        <img src="../assets/scout-bowie.webp" class="bowie-avatar-img" alt="Scout Bowie" onerror="this.onerror=null; this.src='../Bowie.jpg';">
+        <span class="bowie-badge-tag">CHIEF QUANT</span>
+      </div>
+      <div class="bowie-header-content">
+        <div class="bowie-title-row">
+          <div class="bowie-title">
+            <span>NFL Survivor & Pick'em Optimizer</span>
+            <span class="spotlight-tag tag-leverage" style="font-size:9.5px;margin:0;">100% CLIENT-SIDE</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button id="runSimBtn" class="btn-primary" onclick="runMonteCarloSim()">
+              <span>⚡ Run 10k Monte Carlo</span>
+            </button>
+            <button class="btn-secondary" onclick="resetOverrides()" title="Clear manual locks & exclusions">
+              <span>🔄 Reset</span>
+            </button>
+          </div>
+        </div>
+        <div id="bowieSpeech" class="bowie-speech">
+          "Welcome to the Survivor War Room! Calibrating dynamic lookahead paths across all 18 weeks to maximize your pool win equity." 🐾
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode Navigation Tabs -->
+    <div class="view-tabs">
+      <button class="view-tab active" data-view="survivor" onclick="switchView('survivor')">
+        <span>🏈 Survivor Optimizer</span>
+      </button>
+      <button class="view-tab" data-view="pickem" onclick="switchView('pickem')">
+        <span>🎯 Pick'em Confidence Mode</span>
+      </button>
+      <button class="view-tab disabled" data-view="parlay" onclick="switchView('parlay')">
+        <span>⚡ Parlay Engine</span>
+        <span class="badge-coming-soon">Soon</span>
+      </button>
+    </div>
+
+    <!-- Global Controls Card -->
+    <div class="controls-card">
+      
+      <!-- Pool Size Slider -->
+      <div class="control-group">
+        <div class="control-label">
+          <span>Pool Size (Entrants)</span>
+          <span id="poolScaleTag" style="color:var(--gold);font-weight:800;font-size:10px;">Mid-Size Pool (Balanced EV)</span>
+        </div>
+        <div class="pool-slider-wrap">
+          <input type="range" id="poolSizeSlider" class="pool-slider" min="10" max="3000" step="10" value="100" oninput="onPoolSizeInput(this.value)">
+          <span id="poolSizeVal" class="pool-size-badge">100</span>
+        </div>
+      </div>
+
+      <!-- Strategy Toggle -->
+      <div class="control-group">
+        <div class="control-label">Optimization Goal</div>
+        <div class="strategy-btn-group">
+          <button class="strategy-btn" data-strategy="survival" onclick="onStrategySelect('survival')">Max Survival</button>
+          <button class="strategy-btn active" data-strategy="contrarian" onclick="onStrategySelect('contrarian')">Contrarian Leverage</button>
+        </div>
+      </div>
+
+      <!-- Week Selector -->
+      <div class="control-group">
+        <div class="control-label">Active Week</div>
+        <select id="weekSelect" class="custom-select" onchange="onWeekSelect(this.value)">
+          <option value="1" selected>Week 1</option>
+          <option value="2">Week 2</option>
+          <option value="3">Week 3</option>
+          <option value="4">Week 4</option>
+          <option value="5">Week 5</option>
+          <option value="6">Week 6</option>
+          <option value="7">Week 7</option>
+          <option value="8">Week 8</option>
+          <option value="9">Week 9</option>
+          <option value="10">Week 10</option>
+          <option value="11">Week 11</option>
+          <option value="12">Week 12</option>
+          <option value="13">Week 13</option>
+          <option value="14">Week 14</option>
+          <option value="15">Week 15</option>
+          <option value="16">Week 16</option>
+          <option value="17">Week 17</option>
+          <option value="18">Week 18</option>
+        </select>
+      </div>
+
+      <!-- Export Action -->
+      <div class="control-group" style="justify-content:flex-end;">
+        <div class="control-label">&nbsp;</div>
+        <button class="btn-secondary" onclick="copySurvivorPath()" title="Copy entire 18-week strategy to clipboard">
+          <span>📋 Copy Path</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- VIEW 1: SURVIVOR OPTIMIZER -->
+    <div id="survivorView">
+
+      <!-- Active Week 3-Card Spotlight -->
+      <div id="spotlightGrid" class="spotlight-grid">
+        <!-- Injected dynamically by app.js -->
+      </div>
+
+      <!-- Monte Carlo Simulation Results Card -->
+      <div class="matrix-card" style="margin-bottom:24px;">
+        <div class="matrix-header-row">
+          <div class="matrix-title">
+            <span>🎲 10,000 Monte Carlo Pool Simulation Results</span>
+          </div>
+          <span style="font-size:11.5px;color:var(--muted);">Simulating opponent picking behaviors against Vegas win distributions</span>
+        </div>
+        <div class="sim-stats-grid">
+          <div class="sim-stat-card">
+            <div id="simWinEquity" class="sim-stat-value">—</div>
+            <div class="sim-stat-label">Pool Win Equity</div>
+          </div>
+          <div class="sim-stat-card">
+            <div id="simExpectedElim" class="sim-stat-value" style="color:var(--gold-bright);">—</div>
+            <div class="sim-stat-label">Expected Elimination</div>
+          </div>
+          <div class="sim-stat-card">
+            <div id="simSoloWin" class="sim-stat-value" style="color:var(--accent);">—</div>
+            <div class="sim-stat-label">Solo Win Prob</div>
+          </div>
+          <div class="sim-stat-card">
+            <div id="simSplitWin" class="sim-stat-value" style="color:var(--sky);">—</div>
+            <div class="sim-stat-label">Split Pot Prob</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 18-Week Path Grid Matrix -->
+      <div class="matrix-card">
+        <div class="matrix-header-row">
+          <div>
+            <div class="matrix-title">
+              <span>🗺️ 18-Week Strategic Path & Heatmap Matrix</span>
+            </div>
+            <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">
+              Highlighted cells represent your calculated optimal path. Click any cell to <b>Lock 🔒</b> that team for that week.
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:11px;">
+            <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(16,185,129,0.35);border:1px solid var(--accent);border-radius:2px;"></span> Elite (75%+)</span>
+            <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(34,197,94,0.22);border-radius:2px;"></span> Favorite (65%+)</span>
+            <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;background:rgba(245,158,11,0.35);border:1px solid var(--gold);border-radius:2px;"></span> Active Path</span>
+          </div>
+        </div>
+
+        <div class="matrix-table-wrap">
+          <table class="matrix-table">
+            <thead>
+              <tr id="matrixHeaderRow">
+                <!-- Dynamically populated W1 - W18 -->
+              </tr>
+            </thead>
+            <tbody id="matrixBody">
+              <!-- Dynamically populated 32 NFL teams -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Full Weekly Slate Table -->
+      <div class="matrix-card">
+        <div class="matrix-header-row">
+          <div class="matrix-title">
+            <span>📋 Active Week Slate Rankings & EV Metrics</span>
+          </div>
+          <span style="font-size:11.5px;color:var(--muted);">All candidate teams ranked by pool expected value (EV)</span>
+        </div>
+
+        <div class="confidence-table-wrap">
+          <table class="confidence-table">
+            <thead>
+              <tr>
+                <th>Team</th>
+                <th>Opponent</th>
+                <th>Spread</th>
+                <th>Win Probability</th>
+                <th>Public Pick %</th>
+                <th>Expected Value (EV)</th>
+                <th>Future Value</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="weeklySlateBody">
+              <!-- Injected by app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- VIEW 2: PICK'EM CONFIDENCE MODE -->
+    <div id="pickemView" style="display:none;">
+      <div class="matrix-card">
+        <div class="matrix-header-row">
+          <div>
+            <div class="matrix-title">
+              <span>🎯 Pick'em Confidence Rankings (16 to 1 Points)</span>
+            </div>
+            <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">
+              Ranked from highest confidence (16 pts) to lowest (1 pt) based on Vegas win probability and leverage edges.
+            </div>
+          </div>
+          <button class="btn-secondary" onclick="copyPickemSheet()">
+            <span>📋 Copy Pick'em Sheet</span>
+          </button>
+        </div>
+
+        <div class="confidence-table-wrap">
+          <table class="confidence-table">
+            <thead>
+              <tr>
+                <th style="width:70px;">Points</th>
+                <th>Selected Pick</th>
+                <th>Opponent</th>
+                <th>Spread</th>
+                <th>Win Probability</th>
+                <th>Public Consensus</th>
+                <th>Leverage Edge</th>
+              </tr>
+            </thead>
+            <tbody id="pickemTableBody">
+              <!-- Injected by app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast"></div>
+
+  <!-- Main App Module -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

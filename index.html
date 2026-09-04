@@ -119,6 +119,10 @@
       background: linear-gradient(90deg, #eab308, #3b82f6);
     }
 
+    .launch-card.card-odds::before {
+      background: linear-gradient(90deg, #10b981, #00e5ff);
+    }
+
     .launch-card:hover {
       transform: translateY(-4px);
       box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.5);
@@ -134,9 +138,25 @@
       box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.55), 0 0 24px rgba(217, 119, 6, 0.25);
     }
 
+    .launch-card.card-odds:hover {
+      border-color: rgba(16, 185, 129, 0.45);
+      box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.55), 0 0 24px rgba(16, 185, 129, 0.25);
+    }
+
     .launch-card.card-waiver:hover {
       border-color: rgba(234, 179, 8, 0.45);
       box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.55), 0 0 24px rgba(234, 179, 8, 0.25);
+    }
+
+    .btn-odds {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #0f172a;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+    }
+
+    .btn-odds:hover {
+      background: #10b981;
+      box-shadow: 0 6px 18px rgba(16, 185, 129, 0.5);
     }
 
     .btn-waiver {
@@ -494,6 +514,50 @@
           <a href="weekly/index.html?sample=true" class="demo-link" onclick="event.stopPropagation()">
             or Explore Sample Matchup & Waiver Radar →
           </a>
+        </div>
+      </div>
+
+      <!-- Card 3: NFL Survivor & Pick'em Optimizer -->
+      <div class="launch-card card-odds" onclick="window.location.href='odds-suite/index.html'">
+        <div class="card-top">
+          <div class="card-icon-badge" style="border-color: rgba(16, 185, 129, 0.4); color: #34d399;">
+            🏈
+          </div>
+          <div class="card-title">
+            <span>NFL Survivor & Pick'em Optimizer</span>
+            <span class="golden-bone-badge" style="background: rgba(16, 185, 129, 0.18); border-color: #34d399; color: #34d399;">
+              ODDS SUITE
+            </span>
+          </div>
+          <p class="card-subtext">
+            18-week dynamic lookahead pathfinding, 10,000-run Monte Carlo pool simulation, EV optimization, and Pick'em confidence ranking.
+          </p>
+
+          <ul class="card-feature-list">
+            <li class="card-feature-item">
+              <span class="feature-icon">🗺️</span>
+              <span><strong>18-Week Dynamic Lookahead</strong> — Single-elimination solver reserving future value for heavy bye weeks.</span>
+            </li>
+            <li class="card-feature-item">
+              <span class="feature-icon">🎲</span>
+              <span><strong>10,000-Run Monte Carlo Simulation</strong> — Client-side Web Worker modeling pool attrition and solo win equity.</span>
+            </li>
+            <li class="card-feature-item">
+              <span class="feature-icon">🔒</span>
+              <span><strong>Click-to-Lock & Exclude</strong> — Custom path routing with interactive win probability heatmap matrix.</span>
+            </li>
+            <li class="card-feature-item">
+              <span class="feature-icon">🎯</span>
+              <span><strong>1–16 Point Pick'em Confidence</strong> — Value leverage rankings exploiting public consensus gaps.</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card-footer-cta">
+          <a href="odds-suite/index.html" class="card-btn btn-odds" onclick="event.stopPropagation()">
+            Launch Survivor & Odds Suite ➔
+          </a>
+          <span class="demo-link demo-link-spacer" aria-hidden="true" style="visibility: hidden; user-select: none;">&nbsp;</span>
         </div>
       </div>
 
