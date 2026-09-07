@@ -308,9 +308,15 @@ export class SurvivorEngine {
     leverageCandidates.sort((a, b) => b.ev - a.ev);
     const leverage = leverageCandidates[0] || [...picks].sort((a, b) => b.ev - a.ev)[0];
 
-    const trapCandidates = picks.filter(p => p.pickPct >= 0.06 && p.teamCode !== (chalk ? chalk.teamCode : ''));
+    const trapCandidates = picks.filter(p => p.pickPct >= 0.05 && p.winProb <= 0.72 && p.teamCode !== (chalk ? chalk.teamCode : ''));
     trapCandidates.sort((a, b) => (b.pickPct / Math.max(0.40, b.winProb)) - (a.pickPct / Math.max(0.40, a.winProb)));
-    const trap = trapCandidates[0] || null;
+    let trap = trapCandidates[0] || null;
+
+    if (!trap) {
+      const altCandidates = picks.filter(p => p.pickPct >= 0.04 && p.teamCode !== (chalk ? chalk.teamCode : ''));
+      altCandidates.sort((a, b) => a.winProb - b.winProb);
+      trap = altCandidates[0] || null;
+    }
 
     picks.sort((a, b) => b.ev - a.ev);
 

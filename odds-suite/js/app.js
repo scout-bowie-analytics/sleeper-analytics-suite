@@ -13,7 +13,6 @@ class OddsSuiteApp {
       activeWeek: 1,
       poolSize: 100,
       strategy: 'contrarian', // 'survival' | 'contrarian'
-      pathTarget: 'horizon', // 'horizon' | 'full_season'
       currentView: 'survivor', // 'survivor' | 'pickem' | 'parlay'
       lockedPicks: {}, // { [week]: teamCode }
       excludedTeams: new Set(),
@@ -76,7 +75,6 @@ class OddsSuiteApp {
   bindGlobalHandlers() {
     window.onPoolSizeInput = (val) => this.onPoolSizeInput(val);
     window.onStrategySelect = (strat) => this.onStrategySelect(strat);
-    window.onPathTargetSelect = (target) => this.onPathTargetSelect(target);
     window.onWeekSelect = (week) => this.onWeekSelect(week);
     window.switchView = (view) => this.switchView(view);
     window.toggleLockPick = (week, teamCode) => this.toggleLockPick(week, teamCode);
@@ -117,19 +115,6 @@ class OddsSuiteApp {
     document.querySelectorAll('.strategy-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.strategy === strat);
     });
-
-    this.recalculateAll();
-    this.renderAll();
-    this.runMonteCarloSim();
-  }
-
-  onPathTargetSelect(target) {
-    this.state.pathTarget = target;
-    const horizonBtn = document.getElementById('targetHorizonBtn');
-    const fullBtn = document.getElementById('targetFullBtn');
-
-    if (horizonBtn) horizonBtn.classList.toggle('active', target === 'horizon');
-    if (fullBtn) fullBtn.classList.toggle('active', target === 'full_season');
 
     this.recalculateAll();
     this.renderAll();
@@ -229,16 +214,9 @@ class OddsSuiteApp {
     this.state.currentPathResult = this.engine.findOptimal18WeekPath(this.state.slateData, {
       poolSize: this.state.poolSize,
       strategy: this.state.strategy,
-      pathTarget: this.state.pathTarget,
       lockedPicks: this.state.lockedPicks,
       excludedTeams: Array.from(this.state.excludedTeams)
     });
-
-    const horizonWeek = this.state.currentPathResult.targetHorizon;
-    const horizonBtn = document.getElementById('targetHorizonBtn');
-    if (horizonBtn) {
-      horizonBtn.innerHTML = `<span>🎯 Target: Pool Finish (W${horizonWeek})</span>`;
-    }
 
     this.recalculateWeeklyViews();
   }
@@ -467,6 +445,12 @@ class OddsSuiteApp {
 
     const { leverage, chalk, trap } = this.state.weeklySpotlight;
 
+    const formatEv = (val) => {
+      if (val === undefined || val === null || val === '—') return '—';
+      const num = Number(val);
+      return isNaN(num) ? `${val}` : `${num.toFixed(1)}x`;
+    };
+
     container.innerHTML = `
       <!-- Top Leverage Pick -->
       <div class="spotlight-card card-leverage">
@@ -482,12 +466,12 @@ class OddsSuiteApp {
         </div>
         <div class="spotlight-metrics-grid">
           <div>
-            <div class="spotlight-metric-val" style="color:var(--accent);">${leverage ? leverage.ev : '—'}</div>
-            <div class="spotlight-metric-lbl">Expected Value</div>
-          </div>
-          <div>
             <div class="spotlight-metric-val">${leverage ? (leverage.winProb * 100).toFixed(0) + '%' : '—'}</div>
             <div class="spotlight-metric-lbl">Win Odds</div>
+          </div>
+          <div>
+            <div class="spotlight-metric-val" style="color:var(--accent);">${leverage ? formatEv(leverage.ev) : '—'}</div>
+            <div class="spotlight-metric-lbl">Expected Value</div>
           </div>
           <div>
             <div class="spotlight-metric-val" style="color:var(--muted);">${leverage ? (leverage.pickPct * 100).toFixed(1) + '%' : '—'}</div>
@@ -515,7 +499,7 @@ class OddsSuiteApp {
             <div class="spotlight-metric-lbl">Win Odds</div>
           </div>
           <div>
-            <div class="spotlight-metric-val">${chalk ? chalk.ev : '—'}</div>
+            <div class="spotlight-metric-val">${chalk ? formatEv(chalk.ev) : '—'}</div>
             <div class="spotlight-metric-lbl">Expected Value</div>
           </div>
           <div>
@@ -540,19 +524,19 @@ class OddsSuiteApp {
         </div>
         <div class="spotlight-metrics-grid">
           <div>
-            <div class="spotlight-metric-val" style="color:var(--danger);">${trap ? (trap.pickPct * 100).toFixed(1) + '%' : '—'}</div>
-            <div class="spotlight-metric-lbl">Over-Owned %</div>
-          </div>
-          <div>
             <div class="spotlight-metric-val">${trap ? (trap.winProb * 100).toFixed(0) + '%' : '—'}</div>
             <div class="spotlight-metric-lbl">Win Odds</div>
           </div>
           <div>
-            <div class="spotlight-metric-val" style="color:var(--danger);">${trap ? trap.ev : '—'}</div>
+            <div class="spotlight-metric-val" style="color:var(--danger);">${trap ? formatEv(trap.ev) : '—'}</div>
             <div class="spotlight-metric-lbl">Expected Value</div>
           </div>
+          <div>
+            <div class="spotlight-metric-val" style="color:var(--danger);">${trap ? (trap.pickPct * 100).toFixed(1) + '%' : '—'}</div>
+            <div class="spotlight-metric-lbl">Public Pick %</div>
+          </div>
         </div>
-        <div class="spotlight-desc">Heavy public ownership without elite win probability. A loss here wipes out a huge fraction of the pool!</div>
+        <div class="spotlight-desc">${trap ? (trap.winProb <= 0.70 ? 'Heavy public ownership with noticeable upset risk. A loss here knocks out a huge fraction of the pool.' : 'Popular favorite carrying elevated ownership. Fading here creates substantial pool leverage.') : 'No high-risk chalk trap detected on this slate.'}</div>
       </div>
     `;
   }
@@ -598,7 +582,7 @@ class OddsSuiteApp {
             </div>
           </td>
           <td style="font-family:var(--font-mono);">${(p.pickPct * 100).toFixed(1)}%</td>
-          <td style="font-family:var(--font-mono);font-weight:800;color:${p.ev >= 1.2 ? 'var(--accent)' : (p.ev >= 0.8 ? 'var(--gold)' : 'var(--danger)')};">${p.ev}</td>
+          <td style="font-family:var(--font-mono);font-weight:800;color:${p.ev >= 1.2 ? 'var(--accent)' : (p.ev >= 0.8 ? 'var(--gold)' : 'var(--danger)')};">${p.ev.toFixed(1)}x</td>
           <td style="font-family:var(--font-mono);color:var(--muted);">${p.futureValue}</td>
           <td style="text-align:right;">
             <button class="btn-secondary" onclick="toggleLockPick(${this.state.activeWeek}, '${p.teamCode}')" style="padding:2px 8px;font-size:11px;margin-right:4px;${isLocked ? 'background:rgba(16,185,129,0.25);border-color:var(--accent);color:#fff;' : ''}">
@@ -772,30 +756,28 @@ class OddsSuiteApp {
     const poolSize = r.poolSize || this.state.poolSize || 100;
     const horizon = r.targetHorizon || this.state.currentPathResult?.targetHorizon || this.engine.estimatePoolFinishWeek(poolSize);
     
-    // Robust defensive fallbacks to eliminate any possible 'undefined'
+    // Robust defensive fallbacks
     const baselinePct = r.randomBaselinePct !== undefined ? r.randomBaselinePct : Number(((1 / poolSize) * 100).toFixed(2));
     const winEquity = r.winEquityPct !== undefined ? r.winEquityPct : Number(((1.8 / poolSize) * 100).toFixed(2));
     const edgeMult = r.edgeMultiple !== undefined ? r.edgeMultiple : Number((winEquity / Math.max(0.001, baselinePct)).toFixed(1));
     const finishWeek = r.expectedPoolEndWeek !== undefined ? r.expectedPoolEndWeek : (r.expectedElimWeek !== undefined ? r.expectedElimWeek : horizon);
-    const picksNeeded = r.picksNeededToWin !== undefined ? r.picksNeededToWin : Math.round(finishWeek);
     const horizonOdds = r.horizonSurvivalPct !== undefined ? r.horizonSurvivalPct : (this.state.currentPathResult?.horizonSurvivalProb !== undefined ? this.state.currentPathResult.horizonSurvivalProb : 5.4);
-    const full18Odds = r.fullSeasonSurvivalPct !== undefined ? r.fullSeasonSurvivalPct : (this.state.currentPathResult?.cumulativeSurvivalProb !== undefined ? this.state.currentPathResult.cumulativeSurvivalProb : 0.04);
 
     const equityEl = document.getElementById('simWinEquity');
     const edgeSubEl = document.getElementById('simEdgeSub');
     const finishEl = document.getElementById('simExpectedFinish');
     const finishSubEl = document.getElementById('simFinishSub');
-    const picksEl = document.getElementById('simPicksNeeded');
     const oddsEl = document.getElementById('simHorizonOdds');
     const oddsSubEl = document.getElementById('simOddsSub');
 
+    const roundedFinish = Math.round(finishWeek);
+
     if (equityEl) equityEl.textContent = `${winEquity}%`;
-    if (edgeSubEl) edgeSubEl.textContent = `${edgeMult}x edge vs ${baselinePct}% baseline`;
-    if (finishEl) finishEl.textContent = `Week ${finishWeek}`;
-    if (finishSubEl) finishSubEl.textContent = `When all ${poolSize} opponents are expected to be out`;
-    if (picksEl) picksEl.textContent = `${picksNeeded} Wins`;
+    if (edgeSubEl) edgeSubEl.textContent = `${edgeMult}x higher chance to win 1st place than average entry (${baselinePct}%)`;
+    if (finishEl) finishEl.textContent = `Week ${roundedFinish}`;
+    if (finishSubEl) finishSubEl.textContent = `In a ${poolSize}-person pool, all opponents are projected out by Week ${roundedFinish}`;
     if (oddsEl) oddsEl.textContent = `${horizonOdds}%`;
-    if (oddsSubEl) oddsSubEl.textContent = `Odds to reach Week ${horizon} (${full18Odds}% full 18-wk)`;
+    if (oddsSubEl) oddsSubEl.textContent = `Odds of making it through Week ${roundedFinish} without a single loss`;
   }
 
   copySurvivorPath() {

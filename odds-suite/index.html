@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NFL Survivor & Pick'em Optimizer | Scout Bowie Analytics Suite</title>
   <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-  <link rel="stylesheet" href="css/styles.css?v=2.8.0">
+  <link rel="stylesheet" href="css/styles.css?v=2.9.0">
 
   <!-- OpenGraph / Social Metadata -->
   <meta property="og:title" content="NFL Survivor & Pick'em Optimizer | Scout Bowie Analytics Suite">
@@ -96,19 +96,6 @@
         </div>
       </div>
 
-      <!-- Target Horizon Toggle -->
-      <div class="control-group">
-        <div class="control-label">Path Target Horizon</div>
-        <div class="target-toggle-wrap">
-          <button id="targetHorizonBtn" class="target-btn active" data-target="horizon" onclick="onPathTargetSelect('horizon')">
-            <span>🎯 Target: Pool Finish (W11)</span>
-          </button>
-          <button id="targetFullBtn" class="target-btn" data-target="full_season" onclick="onPathTargetSelect('full_season')">
-            <span>🏆 Full 18-Wk Season</span>
-          </button>
-        </div>
-      </div>
-
       <!-- Week Selector -->
       <div class="control-group">
         <div class="control-label">Active Week</div>
@@ -161,25 +148,19 @@
           <div class="sim-stat-card">
             <div id="simWinEquity" class="sim-stat-value" style="color:var(--cyan);">—</div>
             <div class="sim-stat-label">Your Win Chance (Equity)</div>
-            <div id="simEdgeSub" class="sim-stat-sub">Chance to win 1st place vs random baseline</div>
+            <div id="simEdgeSub" class="sim-stat-sub">Simulated odds to finish 1st place & take the pot</div>
           </div>
           <!-- Box 2: Expected Pool Finish -->
           <div class="sim-stat-card">
             <div id="simExpectedFinish" class="sim-stat-value" style="color:var(--gold-bright);">—</div>
-            <div class="sim-stat-label">Expected Pool Finish</div>
-            <div id="simFinishSub" class="sim-stat-sub">When all opponents are expected to be out</div>
+            <div class="sim-stat-label">When Pool is Expected to End</div>
+            <div id="simFinishSub" class="sim-stat-sub">Week when all opponents are projected to be eliminated</div>
           </div>
-          <!-- Box 3: Picks Needed to Win -->
+          <!-- Box 3: Odds of Surviving to the End -->
           <div class="sim-stat-card">
-            <div id="simPicksNeeded" class="sim-stat-value" style="color:var(--accent);">—</div>
-            <div class="sim-stat-label">Picks Needed to Win</div>
-            <div class="sim-stat-sub">Consecutive wins needed to outlast the field</div>
-          </div>
-          <!-- Box 4: Odds to Reach Finish Line -->
-          <div class="sim-stat-card">
-            <div id="simHorizonOdds" class="sim-stat-value" style="color:var(--sky);">—</div>
-            <div class="sim-stat-label">Odds to Reach Finish Line</div>
-            <div id="simOddsSub" class="sim-stat-sub">Survival odds to pool end vs full 18 weeks</div>
+            <div id="simHorizonOdds" class="sim-stat-value" style="color:var(--accent);">—</div>
+            <div class="sim-stat-label">Odds of Surviving to the End</div>
+            <div id="simOddsSub" class="sim-stat-sub">Chance of surviving every week without a single loss</div>
           </div>
         </div>
       </div>
@@ -297,6 +278,6 @@
   <div id="toast"></div>
 
   <!-- Main App Module -->
-  <script type="module" src="js/app.js?v=2.8.0"></script>
+  <script type="module" src="js/app.js?v=2.9.0"></script>
 </body>
 </html>
