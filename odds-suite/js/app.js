@@ -426,36 +426,18 @@ class OddsSuiteApp {
     if (!bar || !this.state.currentPathResult) return;
 
     const horizonWeek = this.state.currentPathResult.targetHorizon || 11;
-    const isHorizonMode = this.state.pathTarget === 'horizon';
-    const relevantWeeks = isHorizonMode ? horizonWeek : 18;
-
-    const usedTeams = new Set();
-    if (this.state.currentPathResult.path) {
-      this.state.currentPathResult.path.forEach(p => {
-        if (p.week <= relevantWeeks && p.teamCode && p.teamCode !== '—') {
-          usedTeams.add(p.teamCode);
-        }
-      });
-    }
-    Object.entries(this.state.lockedPicks).forEach(([w, team]) => {
-      if (parseInt(w, 10) <= relevantWeeks && team && team !== '—') {
-        usedTeams.add(team);
-      }
-    });
-
-    const burnedCount = usedTeams.size;
-    const availCount = Math.max(0, 32 - burnedCount);
+    const numLocks = Object.keys(this.state.lockedPicks).length;
 
     bar.innerHTML = `
       <div class="arsenal-info">
-        <span style="font-size:16px;">🛡️</span>
-        <span style="letter-spacing:0.02em;color:#fff;">REMAINING WEAPON ARSENAL:</span>
-        <span class="arsenal-badge-avail"><strong>${availCount}</strong> Available Teams</span>
+        <span style="font-size:16px;">🗺️</span>
+        <span style="letter-spacing:0.02em;color:#fff;">STRATEGY PATHFINDER:</span>
+        <span class="badge-lock-count"><strong>${numLocks}</strong> ${numLocks === 1 ? 'Active Lock' : 'Active Locks'}</span>
         <span class="arsenal-divider">•</span>
-        <span class="arsenal-badge-burned"><strong>${burnedCount}</strong> Burned / Used</span>
+        <span style="color:var(--text-dim);font-size:12px;">Optimal Target Horizon: <strong style="color:var(--gold-bright);">Week ${horizonWeek} Finish Line</strong></span>
       </div>
       <div class="arsenal-sub">
-        Available teams glow vibrant <strong style="color:var(--accent);">GREEN</strong> across weeks. Burned teams turn <strong style="color:#f87171;">RED</strong> with strikethrough reference odds.
+        💡 <strong>Tip:</strong> Click any matchup cell to <strong>Lock (🔒)</strong> a pick. The engine instantly recalculates the optimal path forward around your selections.
       </div>
     `;
   }
@@ -582,34 +564,28 @@ class OddsSuiteApp {
     const picks = this.state.weeklySpotlight.all;
     const currentWeekPick = this.state.currentPathResult?.path.find(p => p.week === this.state.activeWeek)?.teamCode;
 
-    // Map all teams currently used in the path to their respective picked week
-    const usedTeamsMap = {};
-    if (this.state.currentPathResult?.path) {
-      this.state.currentPathResult.path.forEach(p => {
-        if (p.teamCode && p.teamCode !== '—') usedTeamsMap[p.teamCode] = p.week;
-      });
-    }
-    Object.entries(this.state.lockedPicks).forEach(([w, team]) => {
-      if (team && team !== '—') usedTeamsMap[team] = parseInt(w, 10);
-    });
-
     container.innerHTML = picks.map(p => {
       const isPathPick = currentWeekPick === p.teamCode;
       const isLocked = this.state.lockedPicks[this.state.activeWeek] === p.teamCode;
       const isExcluded = this.state.excludedTeams.has(p.teamCode);
 
-      const isUsedOtherWeek = (usedTeamsMap[p.teamCode] !== undefined && usedTeamsMap[p.teamCode] !== this.state.activeWeek);
-      const usedOtherWeekNum = usedTeamsMap[p.teamCode];
+      // Check if user has locked this team in a different week
+      let lockedOtherWeek = null;
+      Object.entries(this.state.lockedPicks).forEach(([w, team]) => {
+        if (team === p.teamCode && parseInt(w, 10) !== this.state.activeWeek) {
+          lockedOtherWeek = w;
+        }
+      });
 
       const loc = p.isHome ? 'vs' : '@';
       const spreadStr = p.spread < 0 ? `${p.spread}` : `+${p.spread}`;
 
       return `
-        <tr style="${isPathPick ? 'background: rgba(245, 158, 11, 0.08); font-weight:700;' : (isUsedOtherWeek ? 'opacity:0.8;' : '')}">
+        <tr style="${isPathPick ? 'background: rgba(245, 158, 11, 0.08); font-weight:700;' : ''}">
           <td style="font-weight:800;color:#fff;">
             ${p.teamCode} <span style="font-size:11px;color:var(--muted);font-weight:400;">(${p.teamName})</span>
             ${isPathPick ? '<span class="spotlight-tag tag-chalk" style="margin-left:6px;font-size:9px;padding:1px 5px;">PATH PICK</span>' : ''}
-            ${isUsedOtherWeek ? `<span class="spotlight-tag tag-trap" style="margin-left:6px;font-size:9px;padding:1px 5px;background:rgba(239,68,68,0.22);border-color:rgba(239,68,68,0.4);color:#fca5a5;">🚫 USED IN W${usedOtherWeekNum}</span>` : ''}
+            ${lockedOtherWeek ? `<span class="badge-team-locked" style="margin-left:6px;font-size:9px;">🔒 LOCKED W${lockedOtherWeek}</span>` : ''}
           </td>
           <td>${loc} ${p.oppCode}</td>
           <td style="font-family:var(--font-mono);">${spreadStr}</td>
@@ -625,14 +601,9 @@ class OddsSuiteApp {
           <td style="font-family:var(--font-mono);font-weight:800;color:${p.ev >= 1.2 ? 'var(--accent)' : (p.ev >= 0.8 ? 'var(--gold)' : 'var(--danger)')};">${p.ev}</td>
           <td style="font-family:var(--font-mono);color:var(--muted);">${p.futureValue}</td>
           <td style="text-align:right;">
-            ${isUsedOtherWeek 
-              ? `<button class="btn-secondary" onclick="toggleLockPick(${this.state.activeWeek}, '${p.teamCode}')" style="padding:2px 8px;font-size:11px;margin-right:4px;color:#fca5a5;border-color:rgba(239,68,68,0.4);" title="Already picked in Week ${usedOtherWeekNum}. Click to move lock to Week ${this.state.activeWeek}.">
-                   🚫 Used W${usedOtherWeekNum}
-                 </button>`
-              : `<button class="btn-secondary" onclick="toggleLockPick(${this.state.activeWeek}, '${p.teamCode}')" style="padding:2px 8px;font-size:11px;margin-right:4px;">
-                   ${isLocked ? '🔒 Locked' : 'Lock'}
-                 </button>`
-            }
+            <button class="btn-secondary" onclick="toggleLockPick(${this.state.activeWeek}, '${p.teamCode}')" style="padding:2px 8px;font-size:11px;margin-right:4px;${isLocked ? 'background:rgba(16,185,129,0.25);border-color:var(--accent);color:#fff;' : ''}">
+              ${isLocked ? '🔒 Locked' : (lockedOtherWeek ? `Move W${lockedOtherWeek} 🔒` : 'Lock 🔒')}
+            </button>
             <button class="btn-secondary" onclick="toggleExcludeTeam('${p.teamCode}')" style="padding:2px 8px;font-size:11px;color:${isExcluded ? 'var(--accent)' : 'var(--danger)'};">
               ${isExcluded ? 'Include' : 'Exclude'}
             </button>
@@ -657,22 +628,13 @@ class OddsSuiteApp {
     headerRow.innerHTML = headersHtml;
 
     const pathPickMap = {};
-    const usedTeamsMap = {};
     if (this.state.currentPathResult && this.state.currentPathResult.path) {
       this.state.currentPathResult.path.forEach(p => {
         if (p.teamCode && p.teamCode !== '—') {
           pathPickMap[p.week] = p.teamCode;
-          usedTeamsMap[p.teamCode] = p.week;
         }
       });
     }
-    Object.entries(this.state.lockedPicks).forEach(([w, team]) => {
-      if (team && team !== '—') {
-        const wk = parseInt(w, 10);
-        pathPickMap[wk] = team;
-        usedTeamsMap[team] = wk;
-      }
-    });
 
     const TEAMS_LIST = [
       'KC', 'BAL', 'SF', 'DET', 'PHI', 'BUF', 'HOU', 'GB',
@@ -682,12 +644,15 @@ class OddsSuiteApp {
     ];
 
     tableBody.innerHTML = TEAMS_LIST.map(team => {
-      const isTeamUsed = usedTeamsMap[team] !== undefined;
-      const teamUsedWeek = usedTeamsMap[team];
+      // Find if user has a manual lock for this team in any week
+      let lockedWeek = null;
+      Object.entries(this.state.lockedPicks).forEach(([w, t]) => {
+        if (t === team) lockedWeek = w;
+      });
 
-      const teamColBadge = isTeamUsed
-        ? `<span class="badge-team-burned" title="Picked in Week ${teamUsedWeek}">🔒 W${teamUsedWeek}</span>`
-        : `<span class="badge-team-avail" title="Available in Arsenal">AVAIL</span>`;
+      const teamColBadge = lockedWeek
+        ? `<span class="badge-team-locked" title="User Locked in Week ${lockedWeek}">🔒 W${lockedWeek}</span>`
+        : '';
 
       let rowHtml = `<td class="team-col">${team} ${teamColBadge}</td>`;
 
@@ -701,39 +666,37 @@ class OddsSuiteApp {
           continue;
         }
 
-        const isPicked = pathPickMap[w] === team;
-        const isLocked = this.state.lockedPicks[w] === team;
-        const isUsedOtherWeek = isTeamUsed && teamUsedWeek !== w;
+        const isUserLocked = this.state.lockedPicks[w] === team;
+        const isOptimalPath = pathPickMap[w] === team;
         const prob = game.winProb;
         const loc = game.isHome ? 'vs' : '@';
 
-        if (isPicked) {
-          // Selected pick for this week
-          let pickClass = isLocked ? 'cell-locked' : 'cell-picked';
-          if (isFinishCol) pickClass += ' matrix-finish-col';
-          const pickTitle = `Week ${w}: ${team} ${loc} ${game.oppCode} (${(prob * 100).toFixed(0)}% win odds) — ⭐ ACTIVE PATH PICK${isLocked ? ' (LOCKED)' : ''}`;
+        if (isUserLocked) {
+          // User-locked pick for this week (Emerald Green)
+          let lockClass = 'cell-locked';
+          if (isFinishCol) lockClass += ' matrix-finish-col';
+          const lockTitle = `Week ${w}: ${team} ${loc} ${game.oppCode} (${(prob * 100).toFixed(0)}% win odds) — 🔒 USER LOCKED (Click to Unlock)`;
 
           rowHtml += `
-            <td class="${pickClass}" title="${pickTitle}" onclick="toggleLockPick(${w}, '${team}')" style="cursor:pointer;">
+            <td class="${lockClass}" title="${lockTitle}" onclick="toggleLockPick(${w}, '${team}')" style="cursor:pointer;">
               <div style="font-weight:700;">${(prob * 100).toFixed(0)}%</div>
-              <div style="font-size:9.5px;opacity:0.95;font-weight:800;">${isLocked ? '🔒 LOCKED' : '⭐ PICK'}</div>
+              <div style="font-size:9.5px;font-weight:800;opacity:0.95;">🔒 LOCKED</div>
             </td>
           `;
-        } else if (isUsedOtherWeek) {
-          // Burned / Used in another week
-          let burnedClass = 'cell-burned';
-          if (isFinishCol) burnedClass += ' matrix-finish-col';
-          if (isBeyond) burnedClass += ' cell-beyond-horizon';
-          const burnedTitle = `Week ${w}: ${team} ${loc} ${game.oppCode} (${(prob * 100).toFixed(0)}% win odds) — 🚫 BURNED (Used in Week ${teamUsedWeek}). Click to move lock here.`;
+        } else if (isOptimalPath) {
+          // AI Optimal Path suggestion (Gold outline)
+          let pickClass = 'cell-picked';
+          if (isFinishCol) pickClass += ' matrix-finish-col';
+          const pathTitle = `Week ${w}: ${team} ${loc} ${game.oppCode} (${(prob * 100).toFixed(0)}% win odds) — ⭐ OPTIMAL PATH (Click to Lock)`;
 
           rowHtml += `
-            <td class="${burnedClass}" title="${burnedTitle}" onclick="toggleLockPick(${w}, '${team}')" style="cursor:pointer;">
-              <div class="burned-odds">${(prob * 100).toFixed(0)}%</div>
-              <div class="burned-tag">USED W${teamUsedWeek}</div>
+            <td class="${pickClass}" title="${pathTitle}" onclick="toggleLockPick(${w}, '${team}')" style="cursor:pointer;">
+              <div style="font-weight:700;">${(prob * 100).toFixed(0)}%</div>
+              <div style="font-size:9.5px;font-weight:800;opacity:0.95;">⭐ PATH</div>
             </td>
           `;
         } else {
-          // Available / Unused Arsenal Team (Vibrant Heatmap)
+          // Clean, Vibrant Heatmap
           let cellClass = 'cell-toss';
           if (prob >= 0.75) cellClass = 'cell-elite';
           else if (prob >= 0.65) cellClass = 'cell-fav';
@@ -742,7 +705,7 @@ class OddsSuiteApp {
           if (isFinishCol) cellClass += ' matrix-finish-col';
           if (isBeyond) cellClass += ' cell-beyond-horizon';
 
-          const titleText = `Week ${w}: ${team} ${loc} ${game.oppCode} (${(prob * 100).toFixed(0)}% win odds, EV: ${this.engine.calculateEV(prob, game.pickPct, this.state.poolSize)}) — ✅ AVAILABLE IN ARSENAL${isFinishCol ? ' 🏁 [EXPECTED POOL FINISH]' : ''}`;
+          const titleText = `Week ${w}: ${team} ${loc} ${game.oppCode} (${(prob * 100).toFixed(0)}% win odds, EV: ${this.engine.calculateEV(prob, game.pickPct, this.state.poolSize)}) — Click to Lock 🔒${isFinishCol ? ' 🏁 [EXPECTED POOL FINISH]' : ''}`;
 
           rowHtml += `
             <td class="${cellClass}" title="${titleText}" onclick="toggleLockPick(${w}, '${team}')" style="cursor:pointer;">
