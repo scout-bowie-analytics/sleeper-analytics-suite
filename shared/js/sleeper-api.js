@@ -156,7 +156,7 @@ export class SleeperApiClient {
       return MOCK_USERS[0];
     }
 
-    const response = await fetch(`${SLEEPER_BASE_URL}/user/${encodeURIComponent(username)}`);
+    const response = await fetch(`${SLEEPER_BASE_URL}/user/${encodeURIComponent(username)}?t=${Date.now()}`, { cache: 'no-store' });
     if (!response.ok) {
       throw new Error(`Sleeper user "${username}" not found (${response.status})`);
     }
@@ -174,7 +174,7 @@ export class SleeperApiClient {
     const seasonsToTry = [season, '2025', '2024'];
     for (const yr of seasonsToTry) {
       try {
-        const response = await fetch(`${SLEEPER_BASE_URL}/user/${userId}/leagues/nfl/${yr}`);
+        const response = await fetch(`${SLEEPER_BASE_URL}/user/${userId}/leagues/nfl/${yr}?t=${Date.now()}`, { cache: 'no-store' });
         if (response.ok) {
           const data = await response.json();
           if (Array.isArray(data) && data.length > 0) return data;
@@ -210,7 +210,7 @@ export class SleeperApiClient {
     const cleanId = String(leagueId).trim();
 
     try {
-      const response = await fetch(`${SLEEPER_BASE_URL}/league/${cleanId}`);
+      const response = await fetch(`${SLEEPER_BASE_URL}/league/${cleanId}?t=${Date.now()}`, { cache: 'no-store' });
       if (response.ok) {
         return await response.json();
       }
@@ -218,12 +218,12 @@ export class SleeperApiClient {
 
     // Check if user entered a Draft ID
     try {
-      const draftRes = await fetch(`${SLEEPER_BASE_URL}/draft/${cleanId}`);
+      const draftRes = await fetch(`${SLEEPER_BASE_URL}/draft/${cleanId}?t=${Date.now()}`, { cache: 'no-store' });
       if (draftRes.ok) {
         const draft = await draftRes.json();
         if (draft && draft.league_id) {
           console.info(`Resolved Draft ID ${cleanId} to League ID ${draft.league_id}`);
-          const leagueRes = await fetch(`${SLEEPER_BASE_URL}/league/${draft.league_id}`);
+          const leagueRes = await fetch(`${SLEEPER_BASE_URL}/league/${draft.league_id}?t=${Date.now()}`, { cache: 'no-store' });
           if (leagueRes.ok) return await leagueRes.json();
         } else {
           throw new Error(`ID "${cleanId}" is a standalone mock draft without an associated league. Please enter your Sleeper League ID or Username.`);
@@ -241,7 +241,7 @@ export class SleeperApiClient {
    */
   async getNflState() {
     try {
-      const response = await fetch(`${SLEEPER_BASE_URL}/state/nfl`);
+      const response = await fetch(`${SLEEPER_BASE_URL}/state/nfl?t=${Date.now()}`, { cache: 'no-store' });
       if (response.ok) {
         return await response.json();
       }
@@ -264,7 +264,7 @@ export class SleeperApiClient {
       return MOCK_ROSTERS;
     }
 
-    const response = await fetch(`${SLEEPER_BASE_URL}/league/${leagueId}/rosters`);
+    const response = await fetch(`${SLEEPER_BASE_URL}/league/${leagueId}/rosters?t=${Date.now()}`, { cache: 'no-store' });
     if (!response.ok) throw new Error(`Failed to fetch rosters for league ${leagueId} (${response.status})`);
     const data = await response.json();
     if (!Array.isArray(data) || data.length === 0) {
@@ -281,7 +281,7 @@ export class SleeperApiClient {
       return MOCK_USERS;
     }
 
-    const response = await fetch(`${SLEEPER_BASE_URL}/league/${leagueId}/users`);
+    const response = await fetch(`${SLEEPER_BASE_URL}/league/${leagueId}/users?t=${Date.now()}`, { cache: 'no-store' });
     if (!response.ok) throw new Error(`Failed to fetch users for league ${leagueId} (${response.status})`);
     return await response.json();
   }
@@ -295,7 +295,7 @@ export class SleeperApiClient {
     }
 
     try {
-      const response = await fetch(`${SLEEPER_BASE_URL}/league/${leagueId}/matchups/${week}`);
+      const response = await fetch(`${SLEEPER_BASE_URL}/league/${leagueId}/matchups/${week}?t=${Date.now()}`, { cache: 'no-store' });
       if (response.ok) {
         const data = await response.json();
         if (Array.isArray(data) && data.length > 0) return data;

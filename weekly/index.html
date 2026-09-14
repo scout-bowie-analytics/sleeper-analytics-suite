@@ -61,6 +61,8 @@
     window.dispatchGamedayAlerts = function() { window.weeklyOptimizer && window.weeklyOptimizer.dispatchGamedayAlerts(); };
     window.onDiscordInputChanged = function() { window.weeklyOptimizer && window.weeklyOptimizer.onDiscordInputChanged(); };
     window.importRawMatchupJson = function() { window.weeklyOptimizer && window.weeklyOptimizer.importRawMatchupJson(); };
+    window.refreshMatchup = function() { window.weeklyOptimizer && window.weeklyOptimizer.refreshMatchup(); };
+    window.onQuickWeekChange = function(w) { window.weeklyOptimizer && window.weeklyOptimizer.onQuickWeekChange(w); };
   </script>
 
   <style>
@@ -1111,10 +1113,40 @@
         <div class="sub" id="leagueSub" style="color:var(--muted);font-size:13px;margin-top:3px;margin-bottom:2px;">Loading league matchup...</div>
       </div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <!-- Quick Week Switcher Dropdown -->
+        <div style="display:inline-flex;align-items:center;gap:6px;">
+          <label for="quickWeekSelect" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;">Week:</label>
+          <select id="quickWeekSelect" class="select-input" style="padding:4px 8px;font-size:12px;font-weight:700;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:#fff;border-radius:6px;cursor:pointer;" onchange="window.onQuickWeekChange(this.value)">
+            <option value="1">W1</option>
+            <option value="2">W2</option>
+            <option value="3">W3</option>
+            <option value="4">W4</option>
+            <option value="5">W5</option>
+            <option value="6">W6</option>
+            <option value="7">W7</option>
+            <option value="8">W8</option>
+            <option value="9">W9</option>
+            <option value="10">W10</option>
+            <option value="11">W11</option>
+            <option value="12">W12</option>
+            <option value="13">W13</option>
+            <option value="14">W14</option>
+            <option value="15">W15</option>
+            <option value="16">W16</option>
+            <option value="17">W17</option>
+            <option value="18">W18</option>
+          </select>
+        </div>
+
         <!-- Automatic Matchup Status Badge -->
         <div id="matchup-status-badge" class="matchup-status-badge">
           <span class="badge-pregame">⚡ PRE-KICKOFF OPTIMIZER</span>
         </div>
+
+        <!-- Live Refresh Lineup Button -->
+        <button id="btnQuickRefresh" class="reset-btn" onclick="window.refreshMatchup()" title="Fetch live Sleeper rosters, matchups, and latest scoring updates" style="background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.35);color:#38bdf8;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:5px;cursor:pointer;">
+          <span>🔄 Refresh Lineup</span>
+        </button>
 
         <!-- Interactive Demo Mode Switch (Sample Championship Only) -->
         <div id="demo-toggle-container" style="display:none;">

@@ -400,9 +400,43 @@ class WeeklyOptimizerController {
     window.onDrawerPosFilter = (pos) => this.onDrawerPosFilter(pos);
     window.onDrawerSearchInput = () => this.onDrawerSearchInput();
     window.onDrawerSearchPlayer = (name) => this.onDrawerSearchPlayer(name);
-    window.onDrawerSortChanged = () => this.onDrawerSortChanged();
-    window.onDrawerFaabChanged = () => this.onDrawerFaabChanged();
     window.copyDrawerClaims = () => this.copyDrawerClaims();
+    window.refreshMatchup = () => this.refreshMatchup();
+    window.onQuickWeekChange = (w) => this.onQuickWeekChange(w);
+  }
+
+  async refreshMatchup() {
+    if (!this.state.currentLeague) {
+      this.showToast('⚠️ No active league selected to refresh.');
+      return;
+    }
+    const refreshBtn = document.getElementById('btnQuickRefresh');
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+      refreshBtn.innerHTML = '<span>🔄 Syncing...</span>';
+    }
+
+    try {
+      this.showToast('🔄 Fetching live lineups and stats from Sleeper... 🐾');
+      await this.loadMatchupData(this.state.currentLeague, this.state.week, this.state.userRosterId);
+      this.showToast('✅ Sleeper matchup and rosters synced live! 🐾');
+    } catch (e) {
+      console.error('Failed to refresh matchup:', e);
+      this.showToast('⚠️ Refresh failed. Please check connection.');
+    } finally {
+      if (refreshBtn) {
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = '<span>🔄 Refresh Lineup</span>';
+      }
+    }
+  }
+
+  async onQuickWeekChange(newWeek) {
+    const w = parseInt(newWeek, 10);
+    if (isNaN(w) || w < 1 || w > 18) return;
+    this.state.week = w;
+    this.showToast(`Loading Week ${w} matchup from Sleeper... 🐾`);
+    await this.loadMatchupData(this.state.currentLeague, w, this.state.userRosterId);
   }
 
   renderLoadingTables() {
@@ -1257,8 +1291,12 @@ class WeeklyOptimizerController {
 
   evalLineupDrift(currentStarters, optimalSolution) {
     if (!currentStarters || !optimalSolution || !optimalSolution.starters) return [];
-    const currentTotal = currentStarters.reduce((acc, p) => acc + (p.projected_pts || 0), 0);
-    const optimalTotal = optimalSolution.starters.reduce((acc, p) => acc + (p.projected_pts || 0), 0);
+    const allLocked = currentStarters.every(p => p.isLocked || p.isFinal || p.is_final || p.gameState === 'FINAL');
+    if (allLocked) return [];
+    if (!this.state.recommendedSwaps || this.state.recommendedSwaps.length === 0) return [];
+
+    const currentTotal = currentStarters.reduce((acc, p) => acc + (p.projected_pts || p.mean || 0), 0);
+    const optimalTotal = optimalSolution.starters.reduce((acc, p) => acc + (p.projected_pts || p.mean || 0), 0);
     const drift = optimalTotal - currentTotal;
 
     if (drift >= 3.0) {
@@ -1747,7 +1785,7 @@ class WeeklyOptimizerController {
       this.state.starterSlots = starterSlots;
       this.state.slotRequirements = slotReqs;
 
-      // 5. Ingest User Roster Players with Strict Slot Eligibility
+      // 5. Ingest User Roster Players with Strict Slot Eligibility (Preserve Sleeper starters)
       const rawUserStarters = (userMatchup.starters || userRoster.starters || []).filter(id => id && id !== '0' && id !== 'null');
       const rawUserAllPlayers = (userMatchup.players || userRoster.players || []).filter(id => id && id !== '0' && id !== 'null');
 
@@ -1755,22 +1793,36 @@ class WeeklyOptimizerController {
         return sleeperApi.getPlayerMetadata(pid, projections[pid], scoringSettings, week, liveSchedule);
       }).filter(Boolean);
 
-      const rawStarterMetas = rawUserStarters.map(pid => {
-        return sleeperApi.getPlayerMetadata(pid, projections[pid], scoringSettings, week, liveSchedule);
+      const rawStarterMetas = rawUserStarters.map((pid, idx) => {
+        const meta = sleeperApi.getPlayerMetadata(pid, projections[pid], scoringSettings, week, liveSchedule);
+        if (meta) {
+          meta.slotAssigned = starterSlots[idx] || (meta.position || 'FLEX');
+        }
+        return meta;
       }).filter(Boolean);
 
-      // Strict Lineup Solver creates exact valid starters and bench adhering to primary slots + FLEX
-      const userOpt = solveOptimalLineup(
-        allUserResolved.length > 0 ? allUserResolved : rawStarterMetas,
-        'balanced',
-        starterSlots,
-        { week, liveSchedule, currentStarters: rawStarterMetas }
-      );
+      let userStarters = [];
+      let userBench = [];
 
-      let userStarters = userOpt.starters;
-      let userBench = userOpt.bench;
+      if (rawStarterMetas.length > 0) {
+        userStarters = rawStarterMetas;
+        const starterIdSet = new Set(rawStarterMetas.map(p => p.player_id));
+        userBench = allUserResolved
+          .filter(p => !starterIdSet.has(p.player_id))
+          .map(p => ({ ...p, slotAssigned: 'BN' }));
+      } else {
+        // Fallback only if no starters were set in Sleeper
+        const userOpt = solveOptimalLineup(
+          allUserResolved,
+          'balanced',
+          starterSlots,
+          { week, liveSchedule, currentStarters: [] }
+        );
+        userStarters = userOpt.starters;
+        userBench = userOpt.bench;
+      }
 
-      // 6. Ingest Opponent Roster with Strict Slot Eligibility
+      // 6. Ingest Opponent Roster with Strict Slot Eligibility (Preserve Sleeper starters)
       const rawOppStarters = (oppMatchup.starters || oppRoster.starters || []).filter(id => id && id !== '0' && id !== 'null');
       const rawOppAllPlayers = (oppMatchup.players || oppRoster.players || []).filter(id => id && id !== '0' && id !== 'null');
 
@@ -1778,26 +1830,40 @@ class WeeklyOptimizerController {
         return sleeperApi.getPlayerMetadata(pid, projections[pid], scoringSettings, week, liveSchedule);
       }).filter(Boolean);
 
-      const rawOppStarterMetas = rawOppStarters.map(pid => {
-        return sleeperApi.getPlayerMetadata(pid, projections[pid], scoringSettings, week, liveSchedule);
+      const rawOppStarterMetas = rawOppStarters.map((pid, idx) => {
+        const meta = sleeperApi.getPlayerMetadata(pid, projections[pid], scoringSettings, week, liveSchedule);
+        if (meta) {
+          meta.slotAssigned = starterSlots[idx] || (meta.position || 'FLEX');
+        }
+        return meta;
       }).filter(Boolean);
 
-      const oppPool = allOppResolved.length > 0 ? allOppResolved : rawOppStarterMetas;
       let oppStarters = [];
       let oppBench = [];
 
-      if (oppPool.length > 0) {
+      if (rawOppStarterMetas.length > 0) {
+        oppStarters = rawOppStarterMetas;
+        const oppStarterIdSet = new Set(rawOppStarterMetas.map(p => p.player_id));
+        oppBench = allOppResolved
+          .filter(p => !oppStarterIdSet.has(p.player_id))
+          .map(p => ({ ...p, slotAssigned: 'BN' }));
+      } else if (allOppResolved.length > 0) {
         const oppOpt = solveOptimalLineup(
-          oppPool,
+          allOppResolved,
           'balanced',
           starterSlots,
-          { week, liveSchedule, currentStarters: rawOppStarterMetas }
+          { week, liveSchedule, currentStarters: [] }
         );
         oppStarters = oppOpt.starters;
         oppBench = oppOpt.bench;
       } else if (userStarters.length > 0) {
         oppStarters = userStarters.map(p => ({ ...p, projected_pts: Math.max(5, p.projected_pts - 1.5) }));
       }
+
+      this.state.userOfficialPoints = typeof userMatchup.points === 'number' ? userMatchup.points : null;
+      this.state.oppOfficialPoints = typeof oppMatchup.points === 'number' ? oppMatchup.points : null;
+      this.state.userMatchup = userMatchup;
+      this.state.oppMatchup = oppMatchup;
 
       // Ingest live gameday points and game states
       this.state.userStarters = userStarters.map(p => this.resolveLivePlayerGamedayState(p, userMatchup));
@@ -1821,6 +1887,11 @@ class WeeklyOptimizerController {
       this.state.oppTeamName = oppTeamName;
 
       if (typeof document !== 'undefined') {
+        const quickWeekSelect = document.getElementById('quickWeekSelect');
+        if (quickWeekSelect) {
+          quickWeekSelect.value = String(week);
+        }
+
         const oppViewBtn = document.getElementById('viewOppBtn');
         if (oppViewBtn) {
           oppViewBtn.textContent = `Opponent (${oppTeamName})`;
@@ -1853,7 +1924,7 @@ class WeeklyOptimizerController {
 
         if (leagueTitleEl) leagueTitleEl.textContent = `${league?.name || 'Sleeper League'} • Matchup`;
         if (leagueSubEl) leagueSubEl.textContent = `${userTeamName} vs. ${oppTeamName} • Week ${week}`;
-        if (simTitleBadgeEl) simTitleBadgeEl.textContent = `PRE-KICKOFF • WEEK ${week} OPTIMIZER`;
+        if (simTitleBadgeEl) simTitleBadgeEl.textContent = `WEEK ${week} MATCHUP`;
       }
 
       if (this.wormEngine) {
@@ -1900,11 +1971,15 @@ class WeeklyOptimizerController {
     const period = sched?.period || 0;
     const displayClock = sched?.displayClock || '';
 
+    const isFinal = Boolean(player.isFinal || player.is_final || statusState === 'post' || (pointsScored > 0 && statusState !== 'in' && period === 0 && !statusDetail.includes('Q') && !statusDetail.includes('Half')));
+    const isLive = Boolean(player.isLive || player.is_live || (statusState === 'in' && period > 0) || (pointsScored > 0 && (statusDetail.includes('Q') || statusDetail.includes('Half'))));
+    const isLocked = isFinal || isLive || Boolean(sched?.statusState && ['in', 'post'].includes(sched.statusState));
+
     if (this.state.isLiveDemo) {
       gameState = player.gameState || 'UPCOMING';
-    } else if (player.isFinal || player.is_final || (statusState === 'post' && pointsScored > 0)) {
+    } else if (isFinal) {
       gameState = 'FINAL';
-    } else if (player.isLive || player.is_live || (statusState === 'in' && period > 0) || (pointsScored > 0 && (statusDetail.includes('Q') || statusDetail.includes('Half')))) {
+    } else if (isLive) {
       gameState = 'IN_PROGRESS';
     } else {
       gameState = 'UPCOMING';
@@ -1913,12 +1988,21 @@ class WeeklyOptimizerController {
     const quarterLabel = player.gameQuarter || (period ? (period <= 4 ? `${period}Q` : 'OT') : (statusDetail.includes('Half') ? 'HALF' : '3Q'));
     const clockLabel = player.gameClock || displayClock || (statusDetail.includes(' ') ? statusDetail.split(' ').pop() : '8:45');
 
+    const exactPoints = Number(pointsScored.toFixed(2));
+
     return {
       ...player,
       base_projected_pts: player.base_projected_pts ?? player.projected_pts,
-      points_scored: Number(pointsScored.toFixed(1)),
-      actual_pts: Number(pointsScored.toFixed(1)),
+      points_scored: exactPoints,
+      actual_pts: exactPoints,
+      points_banked: exactPoints,
+      actual_points: exactPoints,
       gameState,
+      isFinal,
+      is_final: isFinal,
+      isLive,
+      is_live: isLive,
+      isLocked,
       gameQuarter: quarterLabel,
       gameClock: clockLabel,
       gameSchedule: sched
@@ -2176,22 +2260,27 @@ class WeeklyOptimizerController {
     }
 
     // Banked vs Projected Score Calculation
-    const startersList = [...(this.state.userStarters || []), ...(this.state.oppStarters || [])];
-    const userBanked = (this.state.userStarters || []).reduce((acc, p) => acc + (p.points_scored || p.points_banked || p.actual_pts || p.actual_points || 0), 0);
-    const oppBanked = (this.state.oppStarters || []).reduce((acc, p) => acc + (p.points_scored || p.points_banked || p.actual_pts || p.actual_points || 0), 0);
+    const userStarters = this.state.userStarters || [];
+    const oppStarters = this.state.oppStarters || [];
+    const startersList = [...userStarters, ...oppStarters];
 
-    // Automatic Matchup State Detection
-    const hasLiveGames = startersList.some(p => p.is_live || p.isLive || p.gameState === 'IN_PROGRESS' || (p.points_scored || p.points_banked || p.actual_pts || p.actual_points) > 0);
+    const userBanked = userStarters.reduce((acc, p) => acc + Number(p.points_scored ?? p.points_banked ?? p.actual_pts ?? p.actual_points ?? 0), 0);
+    const oppBanked = oppStarters.reduce((acc, p) => acc + Number(p.points_scored ?? p.points_banked ?? p.actual_pts ?? p.actual_points ?? 0), 0);
+
+    const userAllFinished = userStarters.length > 0 && userStarters.every(p => p.is_final || p.isFinal || p.gameState === 'FINAL');
+    const oppAllFinished = oppStarters.length > 0 && oppStarters.every(p => p.is_final || p.isFinal || p.gameState === 'FINAL');
+    const allMatchupFinished = userAllFinished && oppAllFinished;
+
+    const hasLiveGames = startersList.some(p => p.is_live || p.isLive || p.gameState === 'IN_PROGRESS');
     const hasFinalGames = startersList.some(p => p.is_final || p.isFinal || p.gameState === 'FINAL');
-    const allGamesFinished = startersList.length > 0 && startersList.every(p => p.is_final || p.isFinal || p.gameState === 'FINAL');
-    const isLiveGameday = (hasLiveGames || hasFinalGames || userBanked > 0 || oppBanked > 0) && !allGamesFinished;
+    const isLiveGameday = (hasLiveGames || hasFinalGames || userBanked > 0 || oppBanked > 0) && !allMatchupFinished;
 
     const isDemo = Boolean(this.state.isDemoMode || this.state.currentLeague?.league_id === 'demo_championship_league_2025');
 
     // 1. Render Automatic Status Indicator Badge
     const statusBadgeEl = document.getElementById('matchup-status-badge');
     if (statusBadgeEl) {
-      if (allGamesFinished) {
+      if (allMatchupFinished) {
         statusBadgeEl.innerHTML = `<span class="badge-final">🏁 MATCHUP FINAL</span>`;
       } else if (isLiveGameday) {
         statusBadgeEl.innerHTML = `<span class="badge-live"><span class="pulse-dot" style="background:#ef4444;"></span> LIVE GAMEDAY</span>`;
@@ -2224,7 +2313,7 @@ class WeeklyOptimizerController {
     // 3. Render Top Format Badge
     const simTitleBadgeEl = document.getElementById('simTitleBadge') || document.getElementById('weekBadge');
     if (simTitleBadgeEl) {
-      if (allGamesFinished) {
+      if (allMatchupFinished) {
         simTitleBadgeEl.innerHTML = `MATCHUP FINAL &middot; WEEK ${this.state.week}`;
       } else if (isLiveGameday) {
         simTitleBadgeEl.innerHTML = `<span style="color:#ef4444;font-weight:800;display:inline-flex;align-items:center;gap:6px;"><span class="pulse-dot" style="background:#ef4444;"></span> LIVE GAMEDAY TRACKER &middot; WEEK ${this.state.week}</span>`;
@@ -2234,16 +2323,24 @@ class WeeklyOptimizerController {
     }
 
     if (userProjPtsEl) {
-      if (isLiveGameday) {
-        userProjPtsEl.innerHTML = `<span>${userStats.mean} pts</span> <span style="font-size:11.5px;color:#38bdf8;font-weight:700;margin-left:4px;">(Banked: ${userBanked.toFixed(1)})</span>`;
+      if (allMatchupFinished) {
+        userProjPtsEl.innerHTML = `<span>${userBanked.toFixed(2)} pts</span> <span class="badge-final" style="font-size:11px;margin-left:4px;">FINAL</span>`;
+      } else if (userAllFinished) {
+        userProjPtsEl.innerHTML = `<span>${userBanked.toFixed(2)} pts</span> <span class="badge-final" style="font-size:10.5px;color:#94a3b8;font-weight:700;margin-left:4px;">(ALL IN &middot; ${userBanked.toFixed(2)})</span>`;
+      } else if (isLiveGameday) {
+        userProjPtsEl.innerHTML = `<span>${userStats.mean} pts</span> <span style="font-size:11.5px;color:#38bdf8;font-weight:700;margin-left:4px;">(Banked: ${userBanked.toFixed(2)})</span>`;
       } else {
         userProjPtsEl.textContent = `${userStats.mean} pts`;
       }
     }
 
     if (oppProjPtsEl) {
-      if (isLiveGameday) {
-        oppProjPtsEl.innerHTML = `<span>${oppStats.mean} pts</span> <span style="font-size:11.5px;color:#38bdf8;font-weight:700;margin-left:4px;">(Banked: ${oppBanked.toFixed(1)})</span>`;
+      if (allMatchupFinished) {
+        oppProjPtsEl.innerHTML = `<span>${oppBanked.toFixed(2)} pts</span> <span class="badge-final" style="font-size:11px;margin-left:4px;">FINAL</span>`;
+      } else if (oppAllFinished) {
+        oppProjPtsEl.innerHTML = `<span>${oppBanked.toFixed(2)} pts</span> <span class="badge-final" style="font-size:10.5px;color:#94a3b8;font-weight:700;margin-left:4px;">(ALL IN &middot; ${oppBanked.toFixed(2)})</span>`;
+      } else if (isLiveGameday) {
+        oppProjPtsEl.innerHTML = `<span>${oppStats.mean} pts</span> <span style="font-size:11.5px;color:#38bdf8;font-weight:700;margin-left:4px;">(Banked: ${oppBanked.toFixed(2)})</span>`;
       } else {
         oppProjPtsEl.textContent = `${oppStats.mean} pts`;
       }
@@ -2425,7 +2522,18 @@ class WeeklyOptimizerController {
 
     banner.style.display = 'flex';
 
-    if (!swaps || swaps.length === 0) {
+    const userStarters = this.state.userStarters || [];
+    const allUserLocked = userStarters.length > 0 && userStarters.every(p => p.isLocked || p.isFinal || p.is_final || p.gameState === 'FINAL');
+
+    if (allUserLocked) {
+      list.innerHTML = `<span style="color:#94a3b8;font-weight:600;"><span style="font-size:11px;">🏁</span> All starting players have completed their games. Lineup locked.</span>`;
+      if (applyBtn) {
+        applyBtn.disabled = true;
+        applyBtn.style.opacity = '0.45';
+        applyBtn.style.cursor = 'default';
+        applyBtn.textContent = 'Lineup Locked 🏁';
+      }
+    } else if (!swaps || swaps.length === 0) {
       list.innerHTML = `<span style="color:var(--accent);font-weight:600;">✓ Current lineup is 100% optimal for this strategy weight.</span>`;
       if (applyBtn) {
         applyBtn.disabled = true;
@@ -2455,6 +2563,14 @@ class WeeklyOptimizerController {
    * Determine Scout Alert Badge with Lock, Bark Warn, Boom, Optimal precedence
    */
   getScoutAlertBadge(player, optimalStarterIds, dossier) {
+    const isLocked = Boolean(player.isLocked || player.isFinal || player.is_final || player.gameState === 'FINAL' || player.isLive || player.is_live || player.gameState === 'IN_PROGRESS');
+    if (isLocked) {
+      if (player.gameState === 'FINAL' || player.isFinal || player.is_final) {
+        return '<span class="badge-final" style="font-size:9.5px;">🏁 FINAL</span>';
+      }
+      return '<span class="badge-live-pulse" style="font-size:9.5px;"><span class="live-dot"></span> LIVE</span>';
+    }
+
     const isOptimal = !optimalStarterIds || optimalStarterIds.size === 0 || optimalStarterIds.has(player.player_id);
 
     // If starter is SUB-OPTIMAL (there is a superior bench option):
@@ -2515,9 +2631,9 @@ class WeeklyOptimizerController {
       // Dynamic live gameday status badge
       let statusBadge = getPlayerStatusBadge(player.injury_status);
       if (dist.gameState === 'IN_PROGRESS') {
-        statusBadge = `<span class="badge-live-pulse" title="Live NFL Game Active"><span class="live-dot"></span> ${dist.gameQuarter || '3Q'} ${dist.gameClock || '8:45'}</span><span class="badge-pts-banked">${(dist.points_scored || 0).toFixed(1)} pts</span>`;
+        statusBadge = `<span class="badge-live-pulse" title="Live NFL Game Active"><span class="live-dot"></span> ${dist.gameQuarter || '3Q'} ${dist.gameClock || '8:45'}</span><span class="badge-pts-banked">${(dist.points_scored || 0).toFixed(2)} pts</span>`;
       } else if (dist.gameState === 'FINAL' || dist.isFinal) {
-        statusBadge = `<span class="badge-final" title="Game Final"><span style="font-size:9.5px;">🏁</span> FINAL &middot; ${(dist.points_scored || 0).toFixed(1)} pts</span>`;
+        statusBadge = `<span class="badge-final" title="Game Final"><span style="font-size:9.5px;">🏁</span> FINAL &middot; ${(dist.points_scored || 0).toFixed(2)} pts</span>`;
       }
 
       const rangeBarHtml = renderProjectionRangeBar(dist);
@@ -2596,11 +2712,22 @@ class WeeklyOptimizerController {
               <span class="badge-status healthy" style="background:rgba(56,189,248,0.12);border-color:rgba(56,189,248,0.3);color:#38bdf8;font-size:10px;padding:4px 8px;font-weight:700;letter-spacing:0.02em;">OPP STARTER</span>
             </td>
           `;
+        } else if (dist.isLocked || dist.isFinal || dist.is_final || dist.gameState === 'FINAL' || dist.gameState === 'IN_PROGRESS') {
+          const scoreLabel = (dist.points_scored !== undefined && dist.points_scored !== null) ? `${Number(dist.points_scored).toFixed(2)} pts` : 'LOCKED';
+          actionCellHtml = `
+            <td class="col-swap col-action" onclick="event.stopPropagation();">
+              <span class="badge-final" style="font-size:10.5px;padding:4px 8px;font-weight:700;letter-spacing:0.02em;background:rgba(148,163,184,0.08);color:#94a3b8;border:1px solid rgba(148,163,184,0.25);">
+                🏁 LOCKED (${scoreLabel})
+              </span>
+            </td>
+          `;
         } else {
-          // Find all eligible bench players for this specific slot
-          const eligibleBench = (this.state.userBench || []).filter(b => 
-            isPlayerEligibleForSlot(b.position, slotType)
-          );
+          // Find all eligible UNLOCKED bench players for this specific slot
+          const eligibleBench = (this.state.userBench || []).filter(b => {
+            const bDist = calculatePlayerDistributions(b);
+            const isBLocked = bDist.isLocked || bDist.isFinal || bDist.is_final || bDist.gameState === 'FINAL' || bDist.gameState === 'IN_PROGRESS';
+            return !isBLocked && isPlayerEligibleForSlot(b.position, slotType);
+          });
 
           let dropdownOptions = `
             <option value="${player.player_id}" selected>
@@ -2650,6 +2777,14 @@ class WeeklyOptimizerController {
     const currentStarter = this.state.userStarters[slotIdx];
     if (!currentStarter) return;
 
+    const currentDist = calculatePlayerDistributions(currentStarter);
+    if (currentDist.isLocked || currentDist.isFinal || currentDist.gameState === 'FINAL' || currentDist.gameState === 'IN_PROGRESS') {
+      alert(`Cannot swap ${currentStarter.full_name}: Game is already final or in-progress.`);
+      this.state.activeSwapPreview = null;
+      this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.bowieDossier, false);
+      return;
+    }
+
     if (currentStarter.player_id === newPlayerId) {
       // User selected active starter again -> cancel preview
       this.state.activeSwapPreview = null;
@@ -2659,6 +2794,14 @@ class WeeklyOptimizerController {
 
     const newBenchPlayer = (this.state.userBench || []).find(p => p.player_id === newPlayerId);
     if (!newBenchPlayer) return;
+
+    const newBenchDist = calculatePlayerDistributions(newBenchPlayer);
+    if (newBenchDist.isLocked || newBenchDist.isFinal || newBenchDist.gameState === 'FINAL' || newBenchDist.gameState === 'IN_PROGRESS') {
+      alert(`Cannot start ${newBenchPlayer.full_name}: Player's game is already locked.`);
+      this.state.activeSwapPreview = null;
+      this.renderStartersTable(this.state.userStarters, this.state.optimalSolution, this.state.bowieDossier, false);
+      return;
+    }
 
     const slotType = (this.state.starterSlots && this.state.starterSlots[slotIdx]) || currentStarter.slotAssigned || currentStarter.position || 'FLEX';
 
@@ -2737,7 +2880,8 @@ class WeeklyOptimizerController {
 
     benchBody.innerHTML = bench.map(player => {
       const dist = calculatePlayerDistributions(player);
-      const isRecommended = !isOpponent && optimalStarterIds.has(player.player_id);
+      const isBenchLocked = dist.isLocked || dist.isFinal || dist.is_final || dist.gameState === 'FINAL' || dist.gameState === 'IN_PROGRESS';
+      const isRecommended = !isOpponent && !isBenchLocked && optimalStarterIds.has(player.player_id);
       const posClass = `pos-${player.position || 'FLEX'}`;
       const sched = getGameScheduleInfo(player.team, this.state.week, this.state.liveSchedule);
       const alertBadge = isOpponent ? '<span class="text-muted">—</span>' : this.getScoutAlertBadge(player, optimalStarterIds, dossier);
@@ -2746,9 +2890,9 @@ class WeeklyOptimizerController {
       // Dynamic live gameday status badge
       let statusBadge = getPlayerStatusBadge(player.injury_status);
       if (dist.gameState === 'IN_PROGRESS') {
-        statusBadge = `<span class="badge-live-pulse" title="Live NFL Game Active"><span class="live-dot"></span> ${dist.gameQuarter || '3Q'} ${dist.gameClock || '8:45'}</span><span class="badge-pts-banked">${(dist.points_scored || 0).toFixed(1)} pts</span>`;
+        statusBadge = `<span class="badge-live-pulse" title="Live NFL Game Active"><span class="live-dot"></span> ${dist.gameQuarter || '3Q'} ${dist.gameClock || '8:45'}</span><span class="badge-pts-banked">${(dist.points_scored || 0).toFixed(2)} pts</span>`;
       } else if (dist.gameState === 'FINAL' || dist.isFinal) {
-        statusBadge = `<span class="badge-final" title="Game Final"><span style="font-size:9.5px;">🏁</span> FINAL &middot; ${(dist.points_scored || 0).toFixed(1)} pts</span>`;
+        statusBadge = `<span class="badge-final" title="Game Final"><span style="font-size:9.5px;">🏁</span> FINAL &middot; ${(dist.points_scored || 0).toFixed(2)} pts</span>`;
       }
 
       const rangeBarHtml = renderProjectionRangeBar(dist);

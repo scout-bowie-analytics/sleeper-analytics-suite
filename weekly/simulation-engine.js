@@ -107,10 +107,11 @@ export function calculatePlayerDistributions(player) {
   const isFinal = Boolean(player.isFinal || player.is_final || (player.gameState === 'FINAL' && pointsScored > 0));
   const isLive = Boolean(player.isLive || player.is_live || player.gameState === 'IN_PROGRESS');
   const gameState = isFinal ? 'FINAL' : (isLive ? 'IN_PROGRESS' : (player.gameState === 'FINAL' && pointsScored > 0 ? 'FINAL' : (player.gameState === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'UPCOMING')));
+  const isLocked = Boolean(player.isLocked || isFinal || isLive || gameState === 'FINAL' || gameState === 'IN_PROGRESS');
 
   // 1. FINAL Game State: Lock player's points to actual final score, collapse Floor & Ceiling to final points, zero variance
   if (gameState === 'FINAL' || isFinal) {
-    const finalScore = Number(pointsScored.toFixed(1));
+    const finalScore = Number(pointsScored.toFixed(2));
     return {
       ...player,
       gameState: 'FINAL',
@@ -142,7 +143,8 @@ export function calculatePlayerDistributions(player) {
       isFinal: true,
       is_final: true,
       is_live: false,
-      isLive: false
+      isLive: false,
+      isLocked: true
     };
   }
 
@@ -170,7 +172,8 @@ export function calculatePlayerDistributions(player) {
       bustRate: 100.0,
       remainingTimeFraction: 0,
       isInactive: true,
-      isFinal: false
+      isFinal: false,
+      isLocked: isLocked
     };
   }
 
@@ -472,6 +475,7 @@ export function runMonteCarloSimulation(userStarters, opponentStarters, iteratio
   return {
     iterations,
     winProbability: Number(winProbability.toFixed(1)),
+    oppWinProbability: Number((100 - winProbability).toFixed(1)),
     spread: Number((userStats.mean - oppStats.mean).toFixed(2)),
     totalOverUnder: Number((userStats.mean + oppStats.mean).toFixed(2)),
     userStats,
@@ -582,42 +586,70 @@ export function solveOptimalLineup(allPlayers, strategyModeOrWeight = 'balanced'
   const evaluatedPlayers = allPlayers.map(p => {
     const dist = calculatePlayerDistributions(p);
     const kickoffScore = getPlayerKickoffScore(p, week, liveSchedule);
+    const isLocked = Boolean(p.isLocked || dist.isLocked || dist.isFinal || dist.is_final || dist.gameState === 'FINAL' || dist.isLive || dist.is_live || dist.gameState === 'IN_PROGRESS' || (p.gameSchedule && ['in', 'post'].includes(p.gameSchedule.statusState)));
     return {
       ...dist,
+      isLocked,
       kickoffScore,
       strategicScore: Number(getStrategicScore(dist, strategyModeOrWeight).toFixed(2))
     };
   });
 
-  // Sort all players descending by strategic score (tie-break by projected points, then kickoff score)
-  const sorted = [...evaluatedPlayers].sort((a, b) => {
+  // Check which slots in currentStarters are already LOCKED (game in-progress or final)
+  const finalStarters = new Array(slotTemplate.length).fill(null);
+  const assignedStarterIds = new Set();
+
+  currentStarters.forEach((cs, idx) => {
+    if (idx < slotTemplate.length && cs) {
+      const evaluatedCs = evaluatedPlayers.find(p => p.player_id === cs.player_id) || calculatePlayerDistributions(cs);
+      const isCsLocked = Boolean(cs.isLocked || evaluatedCs.isLocked || evaluatedCs.isFinal || evaluatedCs.is_final || evaluatedCs.gameState === 'FINAL' || evaluatedCs.isLive || evaluatedCs.is_live || evaluatedCs.gameState === 'IN_PROGRESS' || (evaluatedCs.gameSchedule && ['in', 'post'].includes(evaluatedCs.gameSchedule.statusState)));
+      if (isCsLocked) {
+        finalStarters[idx] = { ...evaluatedCs, slotAssigned: slotTemplate[idx] || cs.slotAssigned || 'FLEX' };
+        assignedStarterIds.add(cs.player_id);
+      }
+    }
+  });
+
+  // Filter available candidate pool:
+  // - Unlocked players from evaluatedPlayers who are NOT assigned yet
+  // - Exclude any bench player who is ALREADY LOCKED (since a locked bench player cannot be started)
+  const currentStarterIdSet = new Set(currentStarters.map(s => s.player_id));
+  const availablePool = evaluatedPlayers.filter(p => {
+    if (assignedStarterIds.has(p.player_id)) return false;
+    const wasStarter = currentStarterIdSet.has(p.player_id);
+    if (!wasStarter && p.isLocked) return false;
+    return true;
+  });
+
+  // Sort available players by strategic score (tie-break by projected points, then kickoff score)
+  const sorted = [...availablePool].sort((a, b) => {
     if (b.strategicScore !== a.strategicScore) return b.strategicScore - a.strategicScore;
     if (b.mean !== a.mean) return b.mean - a.mean;
     return b.kickoffScore - a.kickoffScore;
   });
 
-  // Identify slot counts required by template
-  const primarySlots = [];
-  const flexSlots = [];
+  // Identify remaining open primary and flex slots
+  const openPrimarySlots = [];
+  const openFlexSlots = [];
 
   slotTemplate.forEach((slotType, idx) => {
-    if (['FLEX', 'SUPER_FLEX', 'WRRB_FLEX', 'REC_FLEX'].includes(slotType)) {
-      flexSlots.push({ slotType, idx });
-    } else {
-      primarySlots.push({ slotType, idx });
+    if (!finalStarters[idx]) {
+      if (['FLEX', 'SUPER_FLEX', 'WRRB_FLEX', 'REC_FLEX'].includes(slotType)) {
+        openFlexSlots.push({ slotType, idx });
+      } else {
+        openPrimarySlots.push({ slotType, idx });
+      }
     }
   });
 
-  // Group primary slots by position
+  // Group open primary slots by position
   const primaryReqsByPos = {};
-  primarySlots.forEach(({ slotType }) => {
+  openPrimarySlots.forEach(({ slotType }) => {
     primaryReqsByPos[slotType] = (primaryReqsByPos[slotType] || 0) + 1;
   });
 
-  // STEP 1: Fill all strict single-position primary slots first
+  // STEP 1: Fill open single-position primary slots first
   const selectedPrimaryByPos = {};
-  const assignedStarterIds = new Set();
-
   Object.keys(primaryReqsByPos).forEach(pos => {
     const requiredCount = primaryReqsByPos[pos];
     const eligibleForPos = sorted.filter(p => p.position === pos && !assignedStarterIds.has(p.player_id));
@@ -626,9 +658,9 @@ export function solveOptimalLineup(allPlayers, strategyModeOrWeight = 'balanced'
     selected.forEach(p => assignedStarterIds.add(p.player_id));
   });
 
-  // STEP 2: Fill the FLEX / SUPER_FLEX slot(s) from the remaining pool
+  // STEP 2: Fill open FLEX / SUPER_FLEX slot(s) from the remaining pool
   const selectedFlexPlayers = [];
-  flexSlots.forEach(({ slotType }) => {
+  openFlexSlots.forEach(({ slotType }) => {
     const eligibleForFlex = sorted.filter(p => isPlayerEligibleForSlot(p.position, slotType) && !assignedStarterIds.has(p.player_id));
     if (eligibleForFlex.length > 0) {
       const chosen = eligibleForFlex[0];
@@ -637,19 +669,17 @@ export function solveOptimalLineup(allPlayers, strategyModeOrWeight = 'balanced'
     }
   });
 
-  // Combine all selected starters
+  // Combine open selected starters
   const allSelectedStarters = [];
   Object.values(selectedPrimaryByPos).forEach(list => allSelectedStarters.push(...list));
   allSelectedStarters.push(...selectedFlexPlayers);
 
-  // STEP 3: Apply Late-Swap rule to FLEX while strictly preserving positional integrity
-  const finalStarters = new Array(slotTemplate.length).fill(null);
-
+  // STEP 3: Apply Late-Swap rule to open primary & FLEX slots
   // Direct assignment for non-flex, single-slot positions like QB, K, DEF
   ['QB', 'K', 'DEF'].forEach(pos => {
     const playersForPos = selectedPrimaryByPos[pos] || [];
     let pIdx = 0;
-    slotTemplate.forEach((slotType, idx) => {
+    openPrimarySlots.forEach(({ slotType, idx }) => {
       if (slotType === pos && pIdx < playersForPos.length) {
         finalStarters[idx] = { ...playersForPos[pIdx], slotAssigned: pos };
         pIdx++;
@@ -658,7 +688,6 @@ export function solveOptimalLineup(allPlayers, strategyModeOrWeight = 'balanced'
   });
 
   // Skill positions (RB, WR, TE)
-  // For each skill position group, pool all starters of that position (primary + flex)
   const skillPositions = ['RB', 'WR', 'TE'];
   const skillStartersByPos = {};
   skillPositions.forEach(pos => {
@@ -667,8 +696,6 @@ export function solveOptimalLineup(allPlayers, strategyModeOrWeight = 'balanced'
     skillStartersByPos[pos] = [...prim, ...flex];
   });
 
-  // Determine which skill players occupy the FLEX slot(s) based on Late-Swap (latest kickoff time)
-  // Number of flex spots occupied by each position = total starters of pos - primary slots required for pos
   const flexAssignedByPos = {};
   const primaryAssignedByPos = {};
 
@@ -678,10 +705,8 @@ export function solveOptimalLineup(allPlayers, strategyModeOrWeight = 'balanced'
     const surplusForFlex = Math.max(0, pool.length - requiredPrimary);
 
     if (surplusForFlex > 0) {
-      // Sort by kickoffScore descending (latest game first)
       const sortedByLateSwap = [...pool].sort((a, b) => {
         if (b.kickoffScore !== a.kickoffScore) return b.kickoffScore - a.kickoffScore;
-        // Tie-breaker: prefer player already in FLEX in currentStarters
         const aWasFlex = (currentStarters || []).some(s => s.player_id === a.player_id && s.slotAssigned === 'FLEX');
         const bWasFlex = (currentStarters || []).some(s => s.player_id === b.player_id && s.slotAssigned === 'FLEX');
         if (aWasFlex && !bWasFlex) return -1;
@@ -689,7 +714,6 @@ export function solveOptimalLineup(allPlayers, strategyModeOrWeight = 'balanced'
         return a.strategicScore - b.strategicScore;
       });
 
-      // Top surplus players with latest kickoffs get FLEX
       flexAssignedByPos[pos] = sortedByLateSwap.slice(0, surplusForFlex);
       primaryAssignedByPos[pos] = sortedByLateSwap.slice(surplusForFlex);
     } else {
@@ -698,24 +722,12 @@ export function solveOptimalLineup(allPlayers, strategyModeOrWeight = 'balanced'
     }
   });
 
-  // Assign primary skill slots (RB, WR, TE)
-  const currentStarterIds = new Set((currentStarters || []).map(p => p.player_id));
-  const isExactSameStarters = currentStarters && currentStarters.length === allSelectedStarters.length &&
-    allSelectedStarters.every(p => currentStarterIds.has(p.player_id));
-
+  // Assign primary skill slots
   skillPositions.forEach(pos => {
     const list = primaryAssignedByPos[pos] || [];
-    if (isExactSameStarters) {
-      // Preserve current starter slot order (e.g. RB1 vs RB2)
-      const currentSlotMap = new Map();
-      currentStarters.forEach((cs, idx) => currentSlotMap.set(cs.player_id, idx));
-      list.sort((a, b) => (currentSlotMap.get(a.player_id) ?? 0) - (currentSlotMap.get(b.player_id) ?? 0));
-    } else {
-      list.sort((a, b) => b.strategicScore - a.strategicScore);
-    }
-
+    list.sort((a, b) => b.strategicScore - a.strategicScore);
     let pIdx = 0;
-    slotTemplate.forEach((slotType, idx) => {
+    openPrimarySlots.forEach(({ slotType, idx }) => {
       if (slotType === pos && pIdx < list.length) {
         finalStarters[idx] = { ...list[pIdx], slotAssigned: pos };
         pIdx++;
@@ -723,16 +735,14 @@ export function solveOptimalLineup(allPlayers, strategyModeOrWeight = 'balanced'
     });
   });
 
-  // Assign FLEX slots from the designated flex players
+  // Assign FLEX slots
   const allFlexDesignated = [];
   skillPositions.forEach(pos => {
     allFlexDesignated.push(...(flexAssignedByPos[pos] || []));
   });
-
-  // Sort flex designated players by latest kickoff
   allFlexDesignated.sort((a, b) => b.kickoffScore - a.kickoffScore);
 
-  flexSlots.forEach(({ slotType, idx }) => {
+  openFlexSlots.forEach(({ slotType, idx }) => {
     const eligibleFlex = allFlexDesignated.filter(p => isPlayerEligibleForSlot(p.position, slotType));
     if (eligibleFlex.length > 0) {
       const chosen = eligibleFlex[0];
@@ -742,17 +752,31 @@ export function solveOptimalLineup(allPlayers, strategyModeOrWeight = 'balanced'
     }
   });
 
+  // Fallback for any remaining unassigned slots
+  for (let idx = 0; idx < finalStarters.length; idx++) {
+    if (!finalStarters[idx]) {
+      const slotType = slotTemplate[idx];
+      const fallback = sorted.find(p => !assignedStarterIds.has(p.player_id) && isPlayerEligibleForSlot(p.position, slotType));
+      if (fallback) {
+        finalStarters[idx] = { ...fallback, slotAssigned: slotType };
+        assignedStarterIds.add(fallback.player_id);
+      } else if (currentStarters[idx]) {
+        finalStarters[idx] = { ...currentStarters[idx], slotAssigned: slotType };
+      }
+    }
+  }
+
   const verifiedFinalStarters = finalStarters.filter(Boolean);
   const starterIdSet = new Set(verifiedFinalStarters.map(p => p.player_id));
 
   // Bench players (all remaining roster players sorted descending by strategicScore)
-  const benchPlayers = sorted.filter(p => !starterIdSet.has(p.player_id)).map(p => ({
+  const benchPlayers = evaluatedPlayers.filter(p => !starterIdSet.has(p.player_id)).map(p => ({
     ...p,
     slotAssigned: 'BN'
   }));
 
   const totalFloor = Number(verifiedFinalStarters.reduce((acc, p) => acc + (p.floor10 || p.floor || 0), 0).toFixed(1));
-  const totalProj = Number(verifiedFinalStarters.reduce((acc, p) => acc + (p.mean || p.proj || 0), 0).toFixed(1));
+  const totalProj = Number(verifiedFinalStarters.reduce((acc, p) => acc + (p.mean || p.proj || 0), 0).toFixed(2));
   const totalCeil = Number(verifiedFinalStarters.reduce((acc, p) => acc + (p.ceiling90 || p.ceil || 0), 0).toFixed(1));
 
   return {
@@ -778,22 +802,37 @@ export function identifyLineupSwaps(currentStarters, optimalStarters, allPlayers
   const shouldBench = currentStarters.filter(p => !optimalStarterIds.has(p.player_id));
   const shouldStart = optimalStarters.filter(p => !currentStarterIds.has(p.player_id));
 
+  const isPlayerLocked = (p) => Boolean(
+    p.isLocked || p.isFinal || p.is_final || p.gameState === 'FINAL' ||
+    p.isLive || p.is_live || p.gameState === 'IN_PROGRESS' ||
+    (p.gameSchedule && ['in', 'post'].includes(p.gameSchedule.statusState)) ||
+    (p.points_scored > 0 && !p.isInactive)
+  );
+
   const swaps = [];
 
   shouldStart.forEach(starterToAdd => {
+    // If player to start is already locked, cannot recommend swap
+    if (isPlayerLocked(starterToAdd)) return;
+
     const compatibleBench = shouldBench.find(b => 
-      isPlayerEligibleForSlot(starterToAdd.position, b.slotAssigned) ||
-      isPlayerEligibleForSlot(b.position, starterToAdd.slotAssigned) ||
-      b.position === starterToAdd.position
-    ) || shouldBench[0];
+      !isPlayerLocked(b) && (
+        isPlayerEligibleForSlot(starterToAdd.position, b.slotAssigned) ||
+        isPlayerEligibleForSlot(b.position, starterToAdd.slotAssigned) ||
+        b.position === starterToAdd.position
+      )
+    );
 
     if (compatibleBench) {
-      const deltaMean = Number((starterToAdd.mean - compatibleBench.mean).toFixed(2));
-      const deltaStrategic = Number((starterToAdd.strategicScore - compatibleBench.strategicScore).toFixed(2));
+      const addDist = starterToAdd.mean !== undefined ? starterToAdd : calculatePlayerDistributions(starterToAdd);
+      const benchDist = compatibleBench.mean !== undefined ? compatibleBench : calculatePlayerDistributions(compatibleBench);
+
+      const deltaMean = Number(((addDist.mean ?? addDist.proj ?? 0) - (benchDist.mean ?? benchDist.proj ?? 0)).toFixed(2));
+      const deltaStrategic = Number(((addDist.strategicScore ?? addDist.mean ?? 0) - (benchDist.strategicScore ?? benchDist.mean ?? 0)).toFixed(2));
 
       swaps.push({
-        playerToStart: starterToAdd,
-        playerToBench: compatibleBench,
+        playerToStart: addDist,
+        playerToBench: benchDist,
         deltaMean,
         deltaStrategic,
         reason: deltaStrategic > 0 
