@@ -255,7 +255,13 @@ class WaiverApp {
       this.state.userRoster,
       this.state.allPlayersMap,
       weekProjections,
-      trendingDropsMap
+      trendingDropsMap,
+      this.state.currentLeague?.scoring_settings,
+      {
+        league: this.state.currentLeague,
+        leagueSettings: this.state.currentLeague?.settings,
+        rosterPositions: this.state.currentLeague?.roster_positions
+      }
     );
 
     // 4. Extract Free Agent Pool (with trending adds & drops)

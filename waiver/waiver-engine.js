@@ -188,8 +188,8 @@ export class WaiverEngine {
         const baseContingent = hasNflTeam ? this.calculateContingentUpside(player) : 0;
         const contingentScore = (hasNflTeam && inheritance) ? 96 : baseContingent;
 
-        // Check if player is an Elite IR/PUP Stash on return watch
-        const isIrStash = hasNflTeam && isSidelined && ['IR', 'PUP', 'OUT'].includes(injStatus || status) && 
+        // Check if player is an Elite IR/PUP Stash on return watch (official IR/PUP only)
+        const isIrStash = hasNflTeam && isSidelined && ['IR', 'IR-R', 'INJURED_RESERVE', 'PUP'].includes(injStatus || status) && 
           ((player.projected_pts && player.projected_pts >= 7.5) || player.depth_chart_order === 1 || baseContingent >= 60);
 
         const returnBaseline = isIrStash ? Number((player.projected_pts || player.projected_points || 11.5).toFixed(1)) : 0;
@@ -254,7 +254,7 @@ export class WaiverEngine {
   /**
    * Analyze user's current roster to identify starters, bench depth, cut candidates, and IR lock risks
    */
-  analyzeUserRoster(userRoster, allPlayersMap = {}, weekProjections = {}, trendingDropsMap = {}, scoringSettings = null) {
+  analyzeUserRoster(userRoster, allPlayersMap = {}, weekProjections = {}, trendingDropsMap = {}, scoringSettings = null, leagueContext = {}) {
     if (!userRoster || !Array.isArray(userRoster.players)) {
       return {
         starters: [],
@@ -262,12 +262,38 @@ export class WaiverEngine {
         reserve: [],
         weakestBench: null,
         weakestByPos: {},
+        totalIrSlots: 0,
+        openIrSlots: 0,
         hasOpenIrMove: false,
         irEligiblePlayer: null,
         hasIrLockWarning: false,
         lockedPlayer: null
       };
     }
+
+    // 1. Calculate League IR Slot Capacity & Rules
+    const rawPositions = leagueContext.rosterPositions || leagueContext.league?.roster_positions || [];
+    const irSlotsInPositions = rawPositions.filter(pos => pos === 'IR' || pos === 'RESERVE').length;
+    const reserveSlotsSetting = Number(leagueContext.leagueSettings?.reserve_slots ?? leagueContext.league?.settings?.reserve_slots ?? irSlotsInPositions);
+    const totalIrSlots = Math.max(irSlotsInPositions, reserveSlotsSetting);
+
+    // Count current reserve slots used
+    const currentReserveCount = Array.isArray(userRoster.reserve) ? userRoster.reserve.length : 0;
+    const openIrSlots = Math.max(0, totalIrSlots - currentReserveCount);
+
+    // League setting: whether OUT / SUS / DOUBTFUL players are allowed in IR slots
+    const allowOutInIr = Boolean(
+      leagueContext.leagueSettings?.reserve_allow_out === 1 || 
+      leagueContext.league?.settings?.reserve_allow_out === 1
+    );
+    const allowSusInIr = Boolean(
+      leagueContext.leagueSettings?.reserve_allow_sus === 1 || 
+      leagueContext.league?.settings?.reserve_allow_sus === 1
+    );
+    const allowDoubtfulInIr = Boolean(
+      leagueContext.leagueSettings?.reserve_allow_doubtful === 1 || 
+      leagueContext.league?.settings?.reserve_allow_doubtful === 1
+    );
 
     const starterIds = new Set((userRoster.starters || []).map(id => String(id)));
     const reserveIds = new Set((userRoster.reserve || []).map(id => String(id)));
@@ -280,15 +306,18 @@ export class WaiverEngine {
     let hasIrLockWarning = false;
     let lockedPlayer = null;
 
-    const validIrStatuses = new Set(['IR', 'PUP', 'OUT', 'SUSPENDED', 'COV', 'DNR']);
+    const validIrStatuses = new Set(['IR', 'IR-R', 'INJURED_RESERVE', 'PUP']);
+    if (allowOutInIr) validIrStatuses.add('OUT');
+    if (allowSusInIr) { validIrStatuses.add('SUS'); validIrStatuses.add('SUSPENDED'); }
+    if (allowDoubtfulInIr) validIrStatuses.add('DOUBTFUL');
 
     // Check Reserve (IR Slots) for Roster Lock Warnings
     if (Array.isArray(userRoster.reserve)) {
       userRoster.reserve.forEach(pid => {
         const p = allPlayersMap[String(pid)] || { player_id: pid, full_name: `Player ${pid}` };
         reserve.push(p);
-        const pStatus = (p.status || '').toUpperCase();
-        const pInj = (p.injury_status || '').toUpperCase();
+        const pStatus = (p.status || '').toUpperCase().trim();
+        const pInj = (p.injury_status || '').toUpperCase().trim();
         if (!validIrStatuses.has(pInj) && !validIrStatuses.has(pStatus)) {
           hasIrLockWarning = true;
           lockedPlayer = {
@@ -305,9 +334,9 @@ export class WaiverEngine {
       const player = allPlayersMap[pid] || { player_id: pid, full_name: `Player ${pid}`, position: 'FLEX' };
       const team = (player.team || '').trim();
       const hasNflTeam = team && team !== 'FA' && team !== 'None' && team !== 'FA*';
-      const status = (player.status || '').toUpperCase();
-      const injStatus = (player.injury_status || '').toUpperCase();
-      const sidelinedStatuses = new Set(['IR', 'PUP', 'OUT', 'SUSPENDED', 'INACTIVE', 'FREE AGENT', 'RETIRED', 'DNR']);
+      const status = (player.status || '').toUpperCase().trim();
+      const injStatus = (player.injury_status || '').toUpperCase().trim();
+      const sidelinedStatuses = new Set(['IR', 'IR-R', 'INJURED_RESERVE', 'PUP', 'OUT', 'SUSPENDED', 'SUS', 'INACTIVE', 'FREE AGENT', 'RETIRED', 'DNR']);
       const isSidelined = sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus);
 
       let proj = 0;
@@ -356,10 +385,19 @@ export class WaiverEngine {
         starters.push(decorated);
       } else {
         bench.push(decorated);
-        // Check if player on bench is OUT/IR/PUP eligible
-        if (isSidelined || ['OUT', 'IR', 'PUP'].includes(player.status) || ['OUT', 'IR', 'PUP'].includes(player.injury_status)) {
-          irEligiblePlayer = decorated;
-        }
+      }
+
+      // Check if player on active roster / bench is officially IR-eligible AND an open IR slot exists
+      const isOfficialIr = ['IR', 'IR-R', 'INJURED_RESERVE', 'PUP'].includes(injStatus) || 
+                           ['IR', 'IR-R', 'INJURED_RESERVE', 'PUP'].includes(status);
+      const isOutEligible = allowOutInIr && (injStatus === 'OUT' || status === 'OUT');
+      const isSusEligible = allowSusInIr && (injStatus === 'SUSPENDED' || status === 'SUSPENDED' || injStatus === 'SUS' || status === 'SUS');
+      const isDoubtfulEligible = allowDoubtfulInIr && (injStatus === 'DOUBTFUL' || status === 'DOUBTFUL');
+
+      const isIrEligible = isOfficialIr || isOutEligible || isSusEligible || isDoubtfulEligible;
+
+      if (isIrEligible && openIrSlots > 0 && !irEligiblePlayer) {
+        irEligiblePlayer = decorated;
       }
     });
 
@@ -383,14 +421,18 @@ export class WaiverEngine {
       }
     });
 
+    const hasOpenIrMove = Boolean(openIrSlots > 0 && irEligiblePlayer !== null);
+
     return {
       starters,
       bench,
       reserve,
       weakestBench,
       weakestByPos,
-      hasOpenIrMove: irEligiblePlayer !== null,
-      irEligiblePlayer,
+      totalIrSlots,
+      openIrSlots,
+      hasOpenIrMove,
+      irEligiblePlayer: hasOpenIrMove ? irEligiblePlayer : null,
       hasIrLockWarning,
       lockedPlayer
     };

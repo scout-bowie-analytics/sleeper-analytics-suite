@@ -88,11 +88,17 @@ export function getPlayerStatusBadge(injuryStatus) {
   if (status === 'DOUBTFUL') {
     return '<span class="badge-status doubtful">DOUBTFUL</span>';
   }
-  if (status === 'OUT' || status === 'IR' || status === 'IR-R' || status === 'INJURED_RESERVE') {
-    return '<span class="badge-status out">OUT / IR</span>';
+  if (status === 'OUT') {
+    return '<span class="badge-status out">OUT</span>';
   }
-  if (status === 'PUP' || status === 'SUS' || status === 'SUSPENDED') {
+  if (status === 'IR' || status === 'IR-R' || status === 'INJURED_RESERVE') {
+    return '<span class="badge-status ir">IR</span>';
+  }
+  if (status === 'PUP') {
     return '<span class="badge-status pup">PUP</span>';
+  }
+  if (status === 'SUS' || status === 'SUSPENDED') {
+    return '<span class="badge-status sus">SUSPENDED</span>';
   }
   return `<span class="badge-status ques">${status}</span>`;
 }
@@ -3393,7 +3399,12 @@ class WeeklyOptimizerController {
         allPlayersMap,
         projections,
         trendingDropsMap,
-        scoringSettings
+        scoringSettings,
+        {
+          league: this.state.currentLeague || this.state.league,
+          leagueSettings: this.state.currentLeague?.settings || this.state.league?.settings,
+          rosterPositions: this.state.rawRosterPositions || this.state.currentLeague?.roster_positions
+        }
       );
       this.state.userAnalysis = userAnalysis;
 
