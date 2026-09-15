@@ -9,6 +9,11 @@ export const MOCK_LEAGUE_INFO = {
   season: "2025",
   status: "in_season",
   total_rosters: 12,
+  settings: {
+    waiver_type: 2,
+    waiver_budget: 100,
+    leg: 1
+  },
   scoring_settings: {
     rec: 1.0, // PPR
     pass_td: 4.0,

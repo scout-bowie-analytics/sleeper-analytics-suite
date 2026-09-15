@@ -1781,6 +1781,8 @@ class WeeklyOptimizerController {
       const slotReqs = this.parseSlotRequirements(starterSlots);
       this.state.league = league;
       this.state.leagueData = league;
+      this.state.currentLeague = league;
+      this.state.currentLeagueId = league?.league_id || leagueId;
       this.state.rawRosterPositions = rawPositions;
       this.state.starterSlots = starterSlots;
       this.state.slotRequirements = slotReqs;
@@ -3405,16 +3407,19 @@ class WeeklyOptimizerController {
         scoringSettings
       );
 
-      // Check waiver system type: 0 = Rolling wire (Priority order), 1 = FAAB, 2 = Reverse standings
-      const waiverType = Number(this.state.currentLeague?.settings?.waiver_type ?? 0);
-      const isFaab = (waiverType === 1);
+      // Check waiver system type: 0 = Rolling wire (Priority order), 1 = Reverse standings, 2 = FAAB Bidding, 3 = Daily FAAB
+      const leagueObj = this.state.currentLeague || this.state.league || this.state.leagueData;
+      const waiverType = Number(leagueObj?.settings?.waiver_type ?? 0);
+      const totalBudget = Number(leagueObj?.settings?.waiver_budget ?? 0);
+      const isFaab = (waiverType === 2 || waiverType === 3 || totalBudget > 0);
       this.state.isFaabLeague = isFaab;
       this.state.waiverType = waiverType;
 
       // Automatically calculate remaining FAAB budget from Sleeper league settings & user roster
-      const totalBudget = Number(this.state.currentLeague?.settings?.waiver_budget ?? 100);
-      const budgetUsed = Number(this.state.userRoster?.settings?.waiver_budget_used ?? 0);
-      const remainingFaab = Math.max(0, totalBudget - budgetUsed);
+      const userRosterObj = this.state.userRoster || this.state.leagueRosters?.find(r => r.roster_id === this.state.userRosterId);
+      const budgetUsed = Number(userRosterObj?.settings?.waiver_budget_used ?? 0);
+      const effectiveTotalBudget = totalBudget || (isFaab ? 100 : 0);
+      const remainingFaab = Math.max(0, effectiveTotalBudget - budgetUsed);
 
       if (!this.state.hasManualFaabOverride) {
         this.state.waiverFaab = remainingFaab;
@@ -3535,9 +3540,12 @@ class WeeklyOptimizerController {
   }
 
   updateWaiverDrawerHeader() {
-    const waiverType = Number(this.state.currentLeague?.settings?.waiver_type ?? 0);
-    const isFaab = (waiverType === 1);
+    const leagueObj = this.state.currentLeague || this.state.league || this.state.leagueData;
+    const waiverType = Number(leagueObj?.settings?.waiver_type ?? 0);
+    const totalBudget = Number(leagueObj?.settings?.waiver_budget ?? 0);
+    const isFaab = (waiverType === 2 || waiverType === 3 || totalBudget > 0);
     this.state.isFaabLeague = isFaab;
+    this.state.waiverType = waiverType;
 
     const typeBadge = document.getElementById('drawerWaiverTypeBadge');
     const faabContainer = document.getElementById('drawerFaabBudgetContainer');
@@ -3556,12 +3564,12 @@ class WeeklyOptimizerController {
       if (priorityContainer) priorityContainer.style.display = 'none';
       if (sortOption) sortOption.textContent = 'FAAB Priority';
     } else {
-      const userRoster = this.state.leagueRosters?.find(r => r.roster_id === this.state.userRosterId);
+      const userRoster = this.state.leagueRosters?.find(r => r.roster_id === this.state.userRosterId) || this.state.userRoster;
       const waiverPos = userRoster?.settings?.waiver_position || userRoster?.waiver_position || 1;
-      const totalTeams = this.state.currentLeague?.total_rosters || this.state.leagueRosters?.length || 12;
+      const totalTeams = leagueObj?.total_rosters || this.state.leagueRosters?.length || 12;
 
       if (typeBadge) {
-        typeBadge.textContent = waiverType === 2 ? 'STANDINGS WIRE' : 'ROLLING WIRE';
+        typeBadge.textContent = waiverType === 1 ? 'STANDINGS WIRE' : 'ROLLING WIRE';
         typeBadge.style.background = 'rgba(56,189,248,0.15)';
         typeBadge.style.border = '1px solid rgba(56,189,248,0.4)';
         typeBadge.style.color = '#38bdf8';
@@ -3834,7 +3842,11 @@ class WeeklyOptimizerController {
     if (!this.state.waiverTargets || this.state.waiverTargets.length === 0) return;
     const topTargets = this.state.waiverTargets.slice(0, 10);
     const leagueName = (this.state.currentLeague && this.state.currentLeague.name) || 'Weekly Matchup';
-    const text = this.waiverEngine.generateClipboardPriorityList(topTargets, { leagueName, userFaab: this.state.waiverFaab });
+    const text = this.waiverEngine.formatClipboardClaimList(topTargets, {
+      name: leagueName,
+      isFaab: this.state.isFaabLeague,
+      settings: this.state.currentLeague?.settings
+    });
     
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {

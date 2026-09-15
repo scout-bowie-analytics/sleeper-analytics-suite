@@ -267,16 +267,18 @@ class WaiverApp {
       trendingDropsMap
     );
 
-    // Check waiver system type: 0 = Rolling wire (Priority order), 1 = FAAB, 2 = Reverse standings
-    const waiverType = Number(this.state.currentLeague?.settings?.waiver_type ?? 0);
-    const isFaab = (waiverType === 1);
+    // Check waiver system type: 0 = Rolling wire (Priority order), 1 = Reverse standings, 2 = FAAB Bidding, 3 = Daily FAAB
+    const leagueObj = this.state.currentLeague;
+    const waiverType = Number(leagueObj?.settings?.waiver_type ?? 0);
+    const totalBudget = Number(leagueObj?.settings?.waiver_budget ?? 0);
+    const isFaab = (waiverType === 2 || waiverType === 3 || totalBudget > 0);
     this.state.isFaabLeague = isFaab;
     this.state.waiverType = waiverType;
 
     // Automatically calculate remaining FAAB budget from Sleeper league settings & user roster
-    const totalBudget = Number(this.state.currentLeague?.settings?.waiver_budget ?? 100);
     const budgetUsed = Number(this.state.userRoster?.settings?.waiver_budget_used ?? 0);
-    const remainingFaab = Math.max(0, totalBudget - budgetUsed);
+    const effectiveTotalBudget = totalBudget || (isFaab ? 100 : 0);
+    const remainingFaab = Math.max(0, effectiveTotalBudget - budgetUsed);
 
     if (!this.state.hasManualFaabOverride) {
       this.state.userFaab = remainingFaab;
@@ -296,7 +298,7 @@ class WaiverApp {
     } else {
       const userRoster = this.state.rosters?.find(r => r.roster_id === this.state.userRoster?.roster_id) || this.state.userRoster;
       const waiverPos = userRoster?.settings?.waiver_position || userRoster?.waiver_position || 1;
-      const totalTeams = this.state.currentLeague?.total_rosters || this.state.rosters?.length || 12;
+      const totalTeams = leagueObj?.total_rosters || this.state.rosters?.length || 12;
 
       if (faabContainer) faabContainer.style.display = 'none';
       if (priorityContainer) priorityContainer.style.display = 'inline-flex';

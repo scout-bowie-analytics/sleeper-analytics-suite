@@ -797,9 +797,15 @@ export class WaiverEngine {
    */
   formatClipboardClaimList(waiverTargets = [], leagueInfo = {}) {
     const leagueName = leagueInfo.name || 'Sleeper League';
+    const waiverType = Number(leagueInfo.settings?.waiver_type ?? 0);
+    const waiverBudget = Number(leagueInfo.settings?.waiver_budget ?? 0);
+    const isFaab = leagueInfo.isFaab !== undefined 
+      ? Boolean(leagueInfo.isFaab) 
+      : (waiverType === 2 || waiverType === 3 || waiverBudget > 0);
+
     const lines = [
       `🐾 Scout Bowie Waiver Wire Priority List`,
-      `League: ${leagueName} | Generated: ${new Date().toLocaleDateString()}`,
+      `League: ${leagueName} | System: ${isFaab ? 'FAAB Bidding' : 'Priority Order'} | Generated: ${new Date().toLocaleDateString()}`,
       `----------------------------------------------------`
     ];
 
@@ -810,9 +816,21 @@ export class WaiverEngine {
       topClaims.forEach((item, index) => {
         const dropText = item.suggestedDrop ? item.suggestedDrop.text : 'Drop Bench Player';
         const deltaPrefix = item.netDelta >= 0 ? `+${item.netDelta}` : `${item.netDelta}`;
-        const bidLabel = item.faabBid?.label || `$${item.faabBids?.targeted?.dollars ?? 0}`;
-        lines.push(`[${index + 1}] ADD: ${item.full_name} (${item.position} - ${item.team || 'FA'})`);
-        lines.push(`    BID: ${bidLabel}`);
+        lines.push(`[${index + 1}] ADD: ${item.full_name || item.name} (${item.position} - ${item.team || 'FA'})`);
+        if (isFaab) {
+          const bidLabel = item.faabBid?.label || `$${item.faabBids?.targeted?.dollars ?? 0} (${item.faabBids?.targeted?.percent ?? 0}%)`;
+          lines.push(`    BID: ${bidLabel}`);
+        } else {
+          let claimPriority = 'Free Add / Flier';
+          if (item.isNextManUp || item.netDelta >= 4.0 || (item.contingent_score && item.contingent_score >= 85)) {
+            claimPriority = 'High Priority Claim';
+          } else if (item.netDelta >= 1.5 || (item.streamingScore && item.streamingScore >= 80) || (item.contingent_score && item.contingent_score >= 70)) {
+            claimPriority = 'Mid Priority Claim';
+          } else if (item.netDelta > 0 || (item.trending_adds && item.trending_adds > 10000)) {
+            claimPriority = 'Speculative / Low';
+          }
+          lines.push(`    CLAIM: ${claimPriority}`);
+        }
         lines.push(`    ACTION: ${dropText} (Net: ${deltaPrefix} pts)`);
         lines.push(``);
       });
@@ -821,6 +839,10 @@ export class WaiverEngine {
     lines.push(`----------------------------------------------------`);
     lines.push(`Exported from Sleeper Analytics Suite • scout-bowie-analytics.github.io`);
     return lines.join('\n');
+  }
+
+  generateClipboardPriorityList(waiverTargets = [], leagueInfo = {}) {
+    return this.formatClipboardClaimList(waiverTargets, leagueInfo);
   }
 }
 
