@@ -3416,8 +3416,8 @@ class WeeklyOptimizerController {
       this.state.waiverType = waiverType;
 
       // Automatically calculate remaining FAAB budget from Sleeper league settings & user roster
-      const userRosterObj = this.state.userRoster || this.state.leagueRosters?.find(r => r.roster_id === this.state.userRosterId);
-      const budgetUsed = Number(userRosterObj?.settings?.waiver_budget_used ?? 0);
+      const activeUserRoster = this.state.userRoster || this.state.leagueRosters?.find(r => r.roster_id === this.state.userRosterId);
+      const budgetUsed = Number(activeUserRoster?.settings?.waiver_budget_used ?? 0);
       const effectiveTotalBudget = totalBudget || (isFaab ? 100 : 0);
       const remainingFaab = Math.max(0, effectiveTotalBudget - budgetUsed);
 
