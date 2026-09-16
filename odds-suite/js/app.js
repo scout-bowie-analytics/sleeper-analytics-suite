@@ -165,7 +165,7 @@ class OddsSuiteApp {
     if (weekSelect) weekSelect.value = this.state.activeWeek;
 
     this.recalculateWeeklyViews();
-    this.renderWeeklySpotlight();
+    this.renderSpotlightCards();
     this.renderWeeklySlateTable();
     this.renderPickemConfidenceTable();
     this.renderParlaySlate();
@@ -440,9 +440,14 @@ class OddsSuiteApp {
     this.renderArsenalBar();
     this.renderWeeklySlateTable();
     this.renderPathMatrix();
+    this.renderPickemConfidenceTable();
     this.renderSimulationResults();
     this.renderParlaySlate();
     this.renderBetSlip();
+  }
+
+  renderWeeklySpotlight() {
+    this.renderSpotlightCards();
   }
 
   renderArsenalBar() {
