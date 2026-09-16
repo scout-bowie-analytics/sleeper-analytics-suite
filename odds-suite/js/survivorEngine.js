@@ -261,16 +261,17 @@ export class SurvivorEngine {
    * Weekly Recommendation Spotlight Card Generator
    */
   categorizeWeeklyPicks(week, slateData, options = {}) {
+    const targetWeek = Number(week) || 1;
     const poolSize = Math.max(10, Number(options.poolSize) || 100);
     const targetHorizon = options.targetHorizon || 18;
-    const weekData = slateData.find(s => s.week === week);
+    const weekData = slateData.find(s => s.week === targetWeek);
     if (!weekData) return { leverage: null, chalk: null, trap: null, all: [] };
 
     const picks = [];
     weekData.games.forEach(g => {
       // Home Team
       const homeEv = this.calculateEV(g.homeWinProb, g.homePickPct, poolSize);
-      const homeFv = this.calculateFutureValue(g.homeTeam, week, slateData, targetHorizon);
+      const homeFv = this.calculateFutureValue(g.homeTeam, targetWeek, slateData, targetHorizon);
       picks.push({
         id: `${g.id}_home`,
         teamCode: g.homeTeam,
@@ -288,7 +289,7 @@ export class SurvivorEngine {
 
       // Away Team
       const awayEv = this.calculateEV(g.awayWinProb, g.awayPickPct, poolSize);
-      const awayFv = this.calculateFutureValue(g.awayTeam, week, slateData, targetHorizon);
+      const awayFv = this.calculateFutureValue(g.awayTeam, targetWeek, slateData, targetHorizon);
       picks.push({
         id: `${g.id}_away`,
         teamCode: g.awayTeam,
@@ -337,7 +338,8 @@ export class SurvivorEngine {
    * Pick'em Confidence Mode
    */
   generatePickemConfidence(week, slateData) {
-    const weekData = slateData.find(s => s.week === week);
+    const targetWeek = Number(week) || 1;
+    const weekData = slateData.find(s => s.week === targetWeek);
     if (!weekData || !weekData.games) return [];
 
     const games = weekData.games.map(g => {
