@@ -1,0 +1,43 @@
+name: Automated NFL Odds Sync
+
+on:
+  schedule:
+    # Runs at 14:00 UTC (10:00 AM EDT / 9:00 AM EST) every Tuesday and Friday
+    - cron: '0 14 * * 2,5'
+  workflow_dispatch: # Allows manual one-click trigger from GitHub Actions UI
+
+permissions:
+  contents: write
+
+jobs:
+  sync-odds:
+    name: Sync Live NFL Lines
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Fetch and Merge Live Odds
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: |
+          node scripts/fetch-live-odds.mjs
+
+      - name: Commit and Push Updated Lines
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/nfl_slate.json odds-suite/data/nfl_slate.json 2>/dev/null || true
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: auto-refresh nfl lines [skip ci]"
+            git push
+          else
+            echo "No live odds updates detected. Slate remains up to date."
+          fi

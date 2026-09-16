@@ -28,7 +28,11 @@ class OddsSuiteApp {
       // Parlay & SGP State
       parlayFilter: 'all', // 'all' | 'spread' | 'total' | 'moneyline'
       parlaySimResults: null,
-      isParlaySimulating: false
+      isParlaySimulating: false,
+      // Auto-Ticket Generator State
+      autoBuildLegs: 3,
+      autoBuildStrategy: 'best_value', // 'high_win' | 'best_value'
+      autoBuildAccordionOpen: false
     };
 
     this.worker = null;
@@ -125,6 +129,12 @@ class OddsSuiteApp {
     window.resimulateBetSlip = () => this.resimulateBetSlip();
     window.copyParlayTicket = () => this.copyParlayTicket();
     window.toggleMobileBetSlip = (isOpen) => this.toggleMobileBetSlip(isOpen);
+
+    // Auto-Generate Ticket Handlers
+    window.onAutoBuildLegCountSelect = (count) => this.onAutoBuildLegCountSelect(count);
+    window.onAutoBuildStrategySelect = (strat) => this.onAutoBuildStrategySelect(strat);
+    window.toggleAutoBuildAccordion = () => this.toggleAutoBuildAccordion();
+    window.autoGenerateTicket = () => this.autoGenerateTicket();
   }
 
   showUsedTeamToast(teamCode, usedWeek) {
@@ -1299,15 +1309,65 @@ class OddsSuiteApp {
     }).join('');
   }
 
+  onAutoBuildLegCountSelect(count) {
+    this.state.autoBuildLegs = Math.max(2, Math.min(5, parseInt(count, 10) || 3));
+    this.renderBetSlip();
+  }
+
+  onAutoBuildStrategySelect(strat) {
+    this.state.autoBuildStrategy = (strat === 'high_win') ? 'high_win' : 'best_value';
+    this.renderBetSlip();
+  }
+
+  toggleAutoBuildAccordion() {
+    this.state.autoBuildAccordionOpen = !this.state.autoBuildAccordionOpen;
+    this.renderBetSlip();
+  }
+
+  autoGenerateTicket() {
+    const legsCount = this.state.autoBuildLegs || 3;
+    const strategy = this.state.autoBuildStrategy || 'best_value';
+    const generatedLegs = this.parlayEngine.generateAutoTicket(
+      this.state.slateData,
+      this.state.activeWeek,
+      { legsCount, strategy }
+    );
+
+    if (!generatedLegs || generatedLegs.length === 0) {
+      this.showToast(`⚠️ Could not auto-generate ticket for Week ${this.state.activeWeek}.`);
+      return;
+    }
+
+    this.parlayEngine.clearSlip();
+    generatedLegs.forEach(leg => {
+      this.parlayEngine.addLeg(leg);
+    });
+
+    // Close accordion if open
+    this.state.autoBuildAccordionOpen = false;
+
+    const stratName = strategy === 'high_win' ? 'High Win %' : 'Best Value (+EV)';
+    this.showToast(`⚡ Auto-Generated ${generatedLegs.length}-Leg Ticket (${stratName})! 🎯`);
+
+    this.renderParlaySlate();
+    this.renderBetSlip();
+    this.resimulateBetSlip();
+  }
+
   renderBetSlip() {
     const legs = this.parlayEngine.legs;
     const legCountBadge = document.getElementById('slipLegCountBadge');
     const mobileCountBadge = document.getElementById('mobileSlipCountBadge');
     const mobileSlipToggle = document.getElementById('mobileSlipToggle');
     const banner = document.getElementById('slipTicketTypeBanner');
+    const accordionEl = document.getElementById('slipAutoBuildAccordion');
     const legsContainer = document.getElementById('slipLegsList');
     const oddsCard = document.getElementById('slipOddsCard');
     const analyticsCard = document.getElementById('slipAnalyticsCard');
+
+    const legsCount = this.state.autoBuildLegs || 3;
+    const strategy = this.state.autoBuildStrategy || 'best_value';
+    const isAccordionOpen = this.state.autoBuildAccordionOpen || false;
 
     // Update Counts
     const countText = `${legs.length} ${legs.length === 1 ? 'Leg Selected' : 'Legs Selected'}`;
@@ -1324,14 +1384,94 @@ class OddsSuiteApp {
       `;
     }
 
-    // Render Itemized Leg List
+    // Top Compact Accordion (When populated with >= 1 leg)
+    if (accordionEl) {
+      if (legs.length === 0) {
+        accordionEl.style.display = 'none';
+        accordionEl.innerHTML = '';
+      } else {
+        accordionEl.style.display = 'block';
+        accordionEl.innerHTML = `
+          <div class="quick-build-accordion ${isAccordionOpen ? 'open' : ''}">
+            <button class="accordion-toggle-btn" onclick="toggleAutoBuildAccordion()">
+              <span class="accordion-toggle-left">⚡ Quick Auto-Build</span>
+              <span class="accordion-toggle-arrow">${isAccordionOpen ? '▲' : '▼'}</span>
+            </button>
+            ${isAccordionOpen ? `
+              <div class="accordion-body">
+                <div class="quick-build-section">
+                  <div class="quick-build-label">Ticket Size (Legs)</div>
+                  <div class="quick-build-pills">
+                    <button class="quick-pill ${legsCount === 2 ? 'active' : ''}" onclick="onAutoBuildLegCountSelect(2)">2</button>
+                    <button class="quick-pill ${legsCount === 3 ? 'active' : ''}" onclick="onAutoBuildLegCountSelect(3)">3</button>
+                    <button class="quick-pill ${legsCount === 4 ? 'active' : ''}" onclick="onAutoBuildLegCountSelect(4)">4</button>
+                    <button class="quick-pill ${legsCount === 5 ? 'active' : ''}" onclick="onAutoBuildLegCountSelect(5)">5</button>
+                  </div>
+                </div>
+                <div class="quick-build-section">
+                  <div class="quick-build-label">Optimization Strategy</div>
+                  <div class="quick-build-strategies compact">
+                    <button class="strat-pill ${strategy === 'high_win' ? 'active' : ''}" onclick="onAutoBuildStrategySelect('high_win')">
+                      <span class="strat-pill-title">🛡️ High Win %</span>
+                    </button>
+                    <button class="strat-pill ${strategy === 'best_value' ? 'active' : ''}" onclick="onAutoBuildStrategySelect('best_value')">
+                      <span class="strat-pill-title">⚡ Best Value (+EV)</span>
+                    </button>
+                  </div>
+                </div>
+                <button class="btn-auto-build" onclick="autoGenerateTicket()" style="margin-top:8px;">
+                  <span>⚡ Auto-Generate New Ticket</span>
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }
+    }
+
+    // Render Itemized Leg List or Empty State Quick Build Widget
     if (legsContainer) {
       if (legs.length === 0) {
         legsContainer.innerHTML = `
-          <div class="slip-empty-state">
-            <span style="font-size:24px;">🐾</span>
-            <span>Your Bet Slip is currently empty.</span>
-            <span style="font-size:11px;color:var(--muted-dark);">Select any spread, total, or moneyline pill from the matchup cards to calculate correlated SGP win odds & expected value!</span>
+          <div class="quick-build-widget">
+            <div class="quick-build-header">
+              <div class="quick-build-title">
+                <span>⚡ Quick Build Ticket</span>
+              </div>
+              <div class="quick-build-sub">Instant algorithmic parlay generator</div>
+            </div>
+
+            <div class="quick-build-section">
+              <div class="quick-build-label">Ticket Size (Legs)</div>
+              <div class="quick-build-pills">
+                <button class="quick-pill ${legsCount === 2 ? 'active' : ''}" onclick="onAutoBuildLegCountSelect(2)">2</button>
+                <button class="quick-pill ${legsCount === 3 ? 'active' : ''}" onclick="onAutoBuildLegCountSelect(3)">3</button>
+                <button class="quick-pill ${legsCount === 4 ? 'active' : ''}" onclick="onAutoBuildLegCountSelect(4)">4</button>
+                <button class="quick-pill ${legsCount === 5 ? 'active' : ''}" onclick="onAutoBuildLegCountSelect(5)">5</button>
+              </div>
+            </div>
+
+            <div class="quick-build-section">
+              <div class="quick-build-label">Optimization Strategy</div>
+              <div class="quick-build-strategies">
+                <button class="strat-pill ${strategy === 'high_win' ? 'active' : ''}" onclick="onAutoBuildStrategySelect('high_win')">
+                  <span class="strat-pill-title">🛡️ High Win %</span>
+                  <span class="strat-pill-desc">Favorites & strong MLs</span>
+                </button>
+                <button class="strat-pill ${strategy === 'best_value' ? 'active' : ''}" onclick="onAutoBuildStrategySelect('best_value')">
+                  <span class="strat-pill-title">⚡ Best Value (+EV)</span>
+                  <span class="strat-pill-desc">Correlated SGP & low vig</span>
+                </button>
+              </div>
+            </div>
+
+            <button class="btn-auto-build" onclick="autoGenerateTicket()">
+              <span>⚡ Auto-Generate Ticket</span>
+            </button>
+
+            <div class="quick-build-hint">
+              <span>💡 Or select any spread, total, or ML pill from the matchups to build manually.</span>
+            </div>
           </div>
         `;
       } else {

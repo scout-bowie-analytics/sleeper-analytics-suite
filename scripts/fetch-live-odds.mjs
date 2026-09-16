@@ -89,11 +89,21 @@ function findSlateFilePaths() {
     path.resolve(process.cwd(), 'data/nfl_slate.json'),
     path.resolve(process.cwd(), 'odds-suite/data/nfl_slate.json'),
     path.resolve(__dirname, '../data/nfl_slate.json'),
-    path.resolve(__dirname, '../odds-suite/data/nfl_slate.json')
+    path.resolve(__dirname, '../odds-suite/data/nfl_slate.json'),
+    path.resolve(__dirname, '../../data/nfl_slate.json'),
+    path.resolve(__dirname, '../../odds-suite/data/nfl_slate.json')
   ];
 
-  const uniqueExisting = Array.from(new Set(candidates)).filter(p => fs.existsSync(p));
-  return uniqueExisting;
+  const uniquePaths = Array.from(new Set(candidates));
+  const existing = uniquePaths.filter(p => fs.existsSync(p));
+  
+  if (existing.length > 0) {
+    return existing;
+  }
+
+  // If none exist yet, default to root ./data/nfl_slate.json
+  const defaultPath = path.resolve(process.cwd(), 'data/nfl_slate.json');
+  return [defaultPath];
 }
 
 // 4. Preferred Bookmaker Priority
@@ -332,7 +342,11 @@ async function main() {
       });
     });
 
-    // Write updated slate back to disk with 2-space indentation
+    // Ensure target folder exists and write updated slate back to disk with 2-space indentation
+    const dir = path.dirname(slatePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     fs.writeFileSync(slatePath, JSON.stringify(slateData, null, 2) + '\n', 'utf8');
     console.log(`\n💾 Saved ${updatedCount} live odds updates to: ${slatePath}`);
   }

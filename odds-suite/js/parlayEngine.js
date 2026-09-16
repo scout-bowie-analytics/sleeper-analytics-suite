@@ -186,6 +186,19 @@ export class ParlayEngine {
   }
 
   /**
+   * Add a leg directly to the slip (or replace if exact id exists)
+   */
+  addLeg(leg) {
+    if (!leg) return;
+    const existingIdx = this.legs.findIndex(l => l.id === leg.id);
+    if (existingIdx !== -1) {
+      this.legs[existingIdx] = { ...leg };
+    } else {
+      this.legs.push({ ...leg });
+    }
+  }
+
+  /**
    * Remove a leg by ID
    */
   removeLeg(legId) {
@@ -586,5 +599,250 @@ export class ParlayEngine {
       winProbability,
       fairAmericanOdds
     };
+  }
+
+  /**
+   * ⚡ AUTO-GENERATE TICKET BUILDER
+   * Algorithmic ticket generator for High Win % and Best Value (+EV) / Correlated SGP strategies.
+   * @param {Array} slateData - 18-week slate data array
+   * @param {number} week - Active week index (1-18)
+   * @param {Object} options - { legsCount: 2-5, strategy: 'high_win' | 'best_value' }
+   * @returns {Array} Array of candidate leg objects matching bet slip schema
+   */
+  generateAutoTicket(slateData = [], week = 1, options = {}) {
+    const targetWeek = Number(week) || 1;
+    const legsCount = Math.max(2, Math.min(5, Number(options.legsCount) || 3));
+    const strategy = options.strategy || 'best_value';
+
+    const weekData = (slateData || []).find(s => s.week === targetWeek);
+    if (!weekData || !Array.isArray(weekData.games) || weekData.games.length === 0) {
+      return [];
+    }
+
+    const buildLegsForGame = (g) => {
+      const homeSpread = Number(g.spread || 0);
+      const awaySpread = -homeSpread;
+      const total = Number(g.total || 44.0);
+      const spreadOdds = Number(g.spreadOdds || -110);
+      const overOdds = Number(g.totalOverOdds || -110);
+      const underOdds = Number(g.totalUnderOdds || -110);
+      const homeMl = Number(g.homeMoneyline || (g.homeWinProb >= 0.5 ? -150 : 130));
+      const awayMl = Number(g.awayMoneyline || (g.awayWinProb >= 0.5 ? -150 : 130));
+
+      const homeSpreadFormatted = homeSpread > 0 ? `+${homeSpread}` : `${homeSpread}`;
+      const awaySpreadFormatted = awaySpread > 0 ? `+${awaySpread}` : `${awaySpread}`;
+
+      return [
+        {
+          id: `${g.id}_spread_${g.awayTeam}`,
+          gameId: g.id,
+          week: targetWeek,
+          homeTeam: g.homeTeam,
+          awayTeam: g.awayTeam,
+          team: g.awayTeam,
+          selection: g.awayTeam,
+          marketType: 'spread',
+          marketCategory: 'spread',
+          lineValue: awaySpread,
+          bookOdds: spreadOdds,
+          label: `${g.awayTeam} ${awaySpreadFormatted}`,
+          matchup: `${g.awayTeam} @ ${g.homeTeam}`,
+          winProb: g.awayWinProb >= 0.5 ? 0.52 : 0.48
+        },
+        {
+          id: `${g.id}_spread_${g.homeTeam}`,
+          gameId: g.id,
+          week: targetWeek,
+          homeTeam: g.homeTeam,
+          awayTeam: g.awayTeam,
+          team: g.homeTeam,
+          selection: g.homeTeam,
+          marketType: 'spread',
+          marketCategory: 'spread',
+          lineValue: homeSpread,
+          bookOdds: spreadOdds,
+          label: `${g.homeTeam} ${homeSpreadFormatted}`,
+          matchup: `${g.awayTeam} @ ${g.homeTeam}`,
+          winProb: g.homeWinProb >= 0.5 ? 0.52 : 0.48
+        },
+        {
+          id: `${g.id}_total_over`,
+          gameId: g.id,
+          week: targetWeek,
+          homeTeam: g.homeTeam,
+          awayTeam: g.awayTeam,
+          team: 'OVER',
+          selection: 'OVER',
+          marketType: 'total_over',
+          marketCategory: 'total',
+          lineValue: total,
+          bookOdds: overOdds,
+          label: `OVER ${total}`,
+          matchup: `${g.awayTeam} @ ${g.homeTeam}`,
+          winProb: 0.50
+        },
+        {
+          id: `${g.id}_total_under`,
+          gameId: g.id,
+          week: targetWeek,
+          homeTeam: g.homeTeam,
+          awayTeam: g.awayTeam,
+          team: 'UNDER',
+          selection: 'UNDER',
+          marketType: 'total_under',
+          marketCategory: 'total',
+          lineValue: total,
+          bookOdds: underOdds,
+          label: `UNDER ${total}`,
+          matchup: `${g.awayTeam} @ ${g.homeTeam}`,
+          winProb: 0.50
+        },
+        {
+          id: `${g.id}_ml_${g.awayTeam}`,
+          gameId: g.id,
+          week: targetWeek,
+          homeTeam: g.homeTeam,
+          awayTeam: g.awayTeam,
+          team: g.awayTeam,
+          selection: g.awayTeam,
+          marketType: 'moneyline',
+          marketCategory: 'moneyline',
+          lineValue: null,
+          bookOdds: awayMl,
+          label: `${g.awayTeam} ML`,
+          matchup: `${g.awayTeam} @ ${g.homeTeam}`,
+          winProb: Number(g.awayWinProb || 0.5)
+        },
+        {
+          id: `${g.id}_ml_${g.homeTeam}`,
+          gameId: g.id,
+          week: targetWeek,
+          homeTeam: g.homeTeam,
+          awayTeam: g.awayTeam,
+          team: g.homeTeam,
+          selection: g.homeTeam,
+          marketType: 'moneyline',
+          marketCategory: 'moneyline',
+          lineValue: null,
+          bookOdds: homeMl,
+          label: `${g.homeTeam} ML`,
+          matchup: `${g.awayTeam} @ ${g.homeTeam}`,
+          winProb: Number(g.homeWinProb || 0.5)
+        }
+      ];
+    };
+
+    if (strategy === 'high_win') {
+      const allCandidates = [];
+      weekData.games.forEach(g => {
+        const gameLegs = buildLegsForGame(g);
+        gameLegs.forEach(leg => allCandidates.push(leg));
+      });
+
+      // Sort by highest win probability descending
+      allCandidates.sort((a, b) => b.winProb - a.winProb);
+
+      const selected = [];
+      const usedGames = new Set();
+
+      for (const cand of allCandidates) {
+        if (selected.length >= legsCount) break;
+        if (!usedGames.has(cand.gameId)) {
+          selected.push(cand);
+          usedGames.add(cand.gameId);
+        }
+      }
+
+      return selected;
+    }
+
+    // Strategy === 'best_value' (+EV / Correlated SGP Engine)
+    let bestGameScore = -999;
+    let bestGamePair = [];
+
+    weekData.games.forEach(g => {
+      const gameLegs = buildLegsForGame(g);
+      const isHomeFav = (g.homeWinProb || 0.5) >= 0.5;
+      const dogTeam = isHomeFav ? g.awayTeam : g.homeTeam;
+      const favTeam = isHomeFav ? g.homeTeam : g.awayTeam;
+
+      const dogSpreadLeg = gameLegs.find(l => l.marketCategory === 'spread' && l.selection === dogTeam);
+      const underLeg = gameLegs.find(l => l.marketCategory === 'total' && l.selection === 'UNDER');
+      const favMlLeg = gameLegs.find(l => l.marketCategory === 'moneyline' && l.selection === favTeam);
+      const overLeg = gameLegs.find(l => l.marketCategory === 'total' && l.selection === 'OVER');
+
+      const spreadDiff = Math.abs(Number(g.spread || 0));
+      const totalLine = Number(g.total || 44.0);
+
+      // Scenario A: Underdog Cover + Under (Strongest correlation in defensive/tight games)
+      if (dogSpreadLeg && underLeg && spreadDiff >= 3.0) {
+        const score = (spreadDiff * 1.5) + Math.max(0, (48 - totalLine));
+        if (score > bestGameScore) {
+          bestGameScore = score;
+          bestGamePair = [dogSpreadLeg, underLeg];
+        }
+      } 
+      // Scenario B: Heavy Favorite ML + Over (Offensive blowout synergy)
+      else if (favMlLeg && overLeg && spreadDiff >= 6.5) {
+        const score = spreadDiff * 1.3;
+        if (score > bestGameScore) {
+          bestGameScore = score;
+          bestGamePair = [favMlLeg, overLeg];
+        }
+      }
+    });
+
+    const selected = [...bestGamePair];
+    const usedGames = new Set(selected.map(l => l.gameId));
+
+    // Fill remaining legs up to legsCount with top value/win candidate legs from independent games
+    if (selected.length < legsCount) {
+      const otherCandidates = [];
+      weekData.games.forEach(g => {
+        if (!usedGames.has(g.id)) {
+          const gameLegs = buildLegsForGame(g);
+          const isHomeFav = (g.homeWinProb || 0.5) >= 0.5;
+          const favTeam = isHomeFav ? g.homeTeam : g.awayTeam;
+          const favMl = gameLegs.find(l => l.marketCategory === 'moneyline' && l.selection === favTeam);
+          if (favMl && favMl.winProb >= 0.60) {
+            otherCandidates.push(favMl);
+          } else {
+            const spreadFav = gameLegs.find(l => l.marketCategory === 'spread' && l.selection === favTeam);
+            if (spreadFav) otherCandidates.push(spreadFav);
+          }
+        }
+      });
+
+      otherCandidates.sort((a, b) => b.winProb - a.winProb);
+
+      for (const cand of otherCandidates) {
+        if (selected.length >= legsCount) break;
+        if (!usedGames.has(cand.gameId)) {
+          selected.push(cand);
+          usedGames.add(cand.gameId);
+        }
+      }
+    }
+
+    // Fallback if still under legsCount
+    if (selected.length < legsCount) {
+      const allCandidates = [];
+      weekData.games.forEach(g => {
+        if (!usedGames.has(g.id)) {
+          const gameLegs = buildLegsForGame(g);
+          gameLegs.forEach(leg => allCandidates.push(leg));
+        }
+      });
+      allCandidates.sort((a, b) => b.winProb - a.winProb);
+      for (const cand of allCandidates) {
+        if (selected.length >= legsCount) break;
+        if (!usedGames.has(cand.gameId)) {
+          selected.push(cand);
+          usedGames.add(cand.gameId);
+        }
+      }
+    }
+
+    return selected.slice(0, legsCount);
   }
 }
