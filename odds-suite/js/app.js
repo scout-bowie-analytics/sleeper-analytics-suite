@@ -514,6 +514,13 @@ class OddsSuiteApp {
       return;
     }
 
+    if (this.state.currentView === 'pickem') {
+      adviceEl.textContent = this.state.pickemMode === 'ats'
+        ? `"In ATS Pick'em pools, look for contrarian underdogs where the public heavily over-backs favorites!" ⚖️🐾`
+        : `"In Straight Up Pick'em, assign your highest 16-to-1 confidence points to safest favorites while fading traps." 🎯🐾`;
+      return;
+    }
+
     const size = this.state.poolSize;
     const horizon = this.state.currentPathResult?.targetHorizon || 11;
     let text = '';

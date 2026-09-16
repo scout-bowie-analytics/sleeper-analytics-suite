@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NFL Survivor & Pick'em Optimizer | Scout Bowie Analytics Suite</title>
   <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-  <link rel="stylesheet" href="css/styles.css?v=3.4.0">
+  <link rel="stylesheet" href="css/styles.css?v=3.5.0">
 
   <!-- OpenGraph / Social Metadata -->
   <meta property="og:title" content="NFL Survivor & Pick'em Optimizer | Scout Bowie Analytics Suite">
@@ -40,16 +40,8 @@
       <div class="bowie-header-content">
         <div class="bowie-title-row">
           <div class="bowie-title">
-            <span>NFL Survivor & Pick'em Optimizer</span>
+            <span>NFL Survivor & Odds Suite</span>
             <span class="spotlight-tag tag-leverage" style="font-size:9.5px;margin:0;">100% CLIENT-SIDE</span>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button id="runSimBtn" class="btn-primary" onclick="runMonteCarloSim()">
-              <span>⚡ Run 10k Monte Carlo</span>
-            </button>
-            <button class="btn-secondary" onclick="resetOverrides()" title="Clear manual locks & exclusions">
-              <span>🔄 Reset</span>
-            </button>
           </div>
         </div>
         <div id="bowieSpeech" class="bowie-speech">
@@ -58,47 +50,26 @@
       </div>
     </div>
 
-    <!-- Mode Navigation Tabs -->
-    <div class="view-tabs">
-      <button class="view-tab active" data-view="survivor" onclick="switchView('survivor')">
-        <span>🏈 Survivor Optimizer</span>
-      </button>
-      <button class="view-tab" data-view="pickem" onclick="switchView('pickem')">
-        <span>🎯 Pick'em Confidence Mode</span>
-      </button>
-      <button class="view-tab" data-view="parlay" onclick="switchView('parlay')">
-        <span>⚡ Parlay & SGP Engine</span>
-      </button>
-    </div>
-
-    <!-- Global Controls Card -->
-    <div class="controls-card">
+    <!-- Global Navigation Bar: Mode Tabs + Global Week Selector -->
+    <div class="global-nav-bar">
       
-      <!-- Pool Size Slider -->
-      <div class="control-group">
-        <div class="control-label">
-          <span>Pool Size (Entrants)</span>
-          <span id="poolScaleTag" style="color:var(--gold);font-weight:800;font-size:10px;">Mid-Size Pool (Balanced EV)</span>
-        </div>
-        <div class="pool-slider-wrap">
-          <input type="range" id="poolSizeSlider" class="pool-slider" min="10" max="3000" step="10" value="100" oninput="onPoolSizeInput(this.value)">
-          <span id="poolSizeVal" class="pool-size-badge">100</span>
-        </div>
+      <!-- Mode Navigation Tabs -->
+      <div class="view-tabs">
+        <button class="view-tab active" data-view="survivor" onclick="switchView('survivor')">
+          <span>🏈 Survivor Optimizer</span>
+        </button>
+        <button class="view-tab" data-view="pickem" onclick="switchView('pickem')">
+          <span>🎯 Pick'em Confidence Mode</span>
+        </button>
+        <button class="view-tab" data-view="parlay" onclick="switchView('parlay')">
+          <span>⚡ Parlay & SGP Engine</span>
+        </button>
       </div>
 
-      <!-- Strategy Toggle -->
-      <div class="control-group">
-        <div class="control-label">Optimization Goal</div>
-        <div class="strategy-btn-group">
-          <button class="strategy-btn" data-strategy="survival" onclick="onStrategySelect('survival')">Max Survival</button>
-          <button class="strategy-btn active" data-strategy="contrarian" onclick="onStrategySelect('contrarian')">Contrarian Leverage</button>
-        </div>
-      </div>
-
-      <!-- Week Selector -->
-      <div class="control-group">
-        <div class="control-label">Active Week</div>
-        <select id="weekSelect" class="custom-select" onchange="onWeekSelect(this.value)">
+      <!-- Global Week Selector (The ONLY Global Dropdown) -->
+      <div class="global-week-card">
+        <span class="global-week-label">ACTIVE WEEK:</span>
+        <select id="weekSelect" class="global-week-select" onchange="onWeekSelect(this.value)">
           <option value="1" selected>Week 1</option>
           <option value="2">Week 2</option>
           <option value="3">Week 3</option>
@@ -124,6 +95,47 @@
 
     <!-- VIEW 1: SURVIVOR OPTIMIZER -->
     <div id="survivorView">
+
+      <!-- Survivor Configuration Bar: Pool Size & Optimization Goal -->
+      <div class="matrix-card" style="margin-bottom:20px;padding:16px 20px;">
+        <div class="survivor-controls-grid">
+          
+          <!-- Pool Size Slider -->
+          <div class="control-group">
+            <div class="control-label">
+              <span>Pool Size (Entrants)</span>
+              <span id="poolScaleTag" style="color:var(--gold);font-weight:800;font-size:10px;">Mid-Size Pool (Balanced EV)</span>
+            </div>
+            <div class="pool-slider-wrap">
+              <input type="range" id="poolSizeSlider" class="pool-slider" min="10" max="3000" step="10" value="100" oninput="onPoolSizeInput(this.value)">
+              <span id="poolSizeVal" class="pool-size-badge">100</span>
+            </div>
+          </div>
+
+          <!-- Optimization Goal -->
+          <div class="control-group">
+            <div class="control-label">Optimization Goal</div>
+            <div class="strategy-btn-group" id="survivorStrategySelector">
+              <button class="strategy-btn" data-strategy="survival" onclick="onStrategySelect('survival')">Max Survival</button>
+              <button class="strategy-btn active" data-strategy="contrarian" onclick="onStrategySelect('contrarian')">Contrarian Leverage</button>
+            </div>
+          </div>
+
+          <!-- Actions: Run Sim & Reset -->
+          <div class="control-group" style="justify-content:flex-end;">
+            <div class="control-label" style="opacity:0;">Actions</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button id="runSimBtn" class="btn-primary" onclick="runMonteCarloSim()" style="padding:7px 14px;font-size:12px;white-space:nowrap;">
+                <span>⚡ Re-Run 10k</span>
+              </button>
+              <button class="btn-secondary" onclick="resetOverrides()" title="Clear manual locks & exclusions" style="padding:7px 12px;font-size:12px;white-space:nowrap;">
+                <span>🔄 Reset</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
 
       <!-- Active Week 3-Card Spotlight -->
       <div id="spotlightGrid" class="spotlight-grid">
@@ -478,6 +490,6 @@
   <div id="toast"></div>
 
   <!-- Main App Module -->
-  <script type="module" src="js/app.js?v=3.4.0"></script>
+  <script type="module" src="js/app.js?v=3.5.0"></script>
 </body>
 </html>

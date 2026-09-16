@@ -255,28 +255,83 @@ body {
   text-transform: uppercase;
 }
 
-/* Control Bar (Pool Size Slider, Strategy, Week) */
-.controls-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 16px 20px;
+/* Global Navigation Bar (Tabs + Global Week Selector) */
+.global-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.global-nav-bar .view-tabs {
+  flex: 1;
+  min-width: 320px;
+  margin-bottom: 0;
+}
+
+.global-week-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  padding: 6px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.global-week-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--gold-bright);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.global-week-select {
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.global-week-select:hover, .global-week-select:focus {
+  border-color: var(--gold);
+}
+
+/* Survivor Dedicated Controls Grid */
+.survivor-controls-grid {
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1.4fr 1fr auto;
   align-items: center;
   gap: 24px;
 }
 
 @media (max-width: 1024px) {
-  .controls-card {
+  .survivor-controls-grid {
     grid-template-columns: 1fr 1fr;
   }
 }
 
-@media (max-width: 640px) {
-  .controls-card {
+@media (max-width: 700px) {
+  .survivor-controls-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .global-nav-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .global-week-card {
+    justify-content: space-between;
   }
 }
 
