@@ -292,6 +292,7 @@ export class ParlayEngine {
    * @param {Number} stake - stake in dollars
    */
   calculateAnalytics(simResults = null, slateData = [], customOddsOverride = null, stake = 10) {
+    const classification = this.getTicketClassification();
     const uncorrelated = this.calculateUncorrelatedBookOdds();
     
     // Effective offered American odds (either user override or default bookmaker multiplier)
@@ -331,12 +332,65 @@ export class ParlayEngine {
     const naiveFairProduct = this.calculateNaiveFairProduct(slateData);
     const correlationBoostPct = (simWinProb - naiveFairProduct) * 100;
 
+    // Plain-English Ticket Value formulation:
+    // 1. If EV > 0: "Great Value (+EV)" with subtitle "Book payout beats the true math"
+    // 2. If EV between 0% and -5%: "Fair Price" with subtitle "Standard book fee (X%)"
+    // 3. If EV < -5%: "Overpriced" with subtitle "Sportsbook is taking a steep X% cut"
+    let ticketValueBadge = 'Overpriced';
+    let ticketValueBadgeClass = 'badge-overpriced';
+    let ticketValueColor = 'var(--danger)';
+    let ticketValueSubtitle = `Sportsbook is taking a steep ${vigTaxPct.toFixed(1)}% cut`;
+
+    if (expectedValuePct > 0) {
+      ticketValueBadge = 'Great Value (+EV)';
+      ticketValueBadgeClass = 'badge-great-value';
+      ticketValueColor = 'var(--accent)';
+      ticketValueSubtitle = 'Book payout beats the true math';
+    } else if (expectedValuePct >= -5.0) {
+      ticketValueBadge = 'Fair Price';
+      ticketValueBadgeClass = 'badge-fair-price';
+      ticketValueColor = 'var(--gold-bright)';
+      ticketValueSubtitle = `Standard book fee (${vigTaxPct.toFixed(1)}%)`;
+    }
+
+    // Plain-English Pick Synergy formulation:
+    // 1. If boost > +0.5%: "+X% Synergy: Picks help each other"
+    // 2. If boost < -0.5%: "-X% Clash: Picks fight each other"
+    // 3. If within +/-0.5% (or multi-game): "Neutral: Independent games"
+    let synergyHeader = 'Pick Synergy:';
+    let synergyText = 'Neutral: Independent games';
+    let synergyDetail = 'Neutral game dynamics across selected legs.';
+    let synergyColor = 'var(--text-dim)';
+    let synergyStatus = 'neutral';
+
+    if (classification.isSgp) {
+      if (correlationBoostPct > 0.5) {
+        synergyText = `+${correlationBoostPct.toFixed(1)}% Synergy: Picks help each other`;
+        synergyDetail = `Positive game-script correlation increases true joint win probability by +${correlationBoostPct.toFixed(1)}% over independent product math.`;
+        synergyColor = 'var(--gold-bright)';
+        synergyStatus = 'synergy';
+      } else if (correlationBoostPct < -0.5) {
+        synergyText = `${correlationBoostPct.toFixed(1)}% Clash: Picks fight each other`;
+        synergyDetail = `Opposing game scripts decrease joint probability by ${Math.abs(correlationBoostPct).toFixed(1)}% below independent product math.`;
+        synergyColor = 'var(--danger)';
+        synergyStatus = 'clash';
+      } else {
+        synergyText = 'Neutral: Independent games';
+        synergyDetail = 'Intra-game correlation has minimal directional impact on this combination.';
+        synergyColor = 'var(--text-dim)';
+        synergyStatus = 'neutral';
+      }
+    } else {
+      synergyText = 'Neutral: Independent games';
+      synergyDetail = `Multi-game parlay selections are independent (uncorrelated baseline fair product: ${Number((naiveFairProduct * 100).toFixed(2))}%).`;
+      synergyColor = 'var(--text-dim)';
+      synergyStatus = 'neutral';
+    }
+
     // Payout and Profit
     const safeStake = Math.max(0.5, Number(stake) || 10);
     const potentialPayout = safeStake * effectiveDecimal;
     const potentialProfit = potentialPayout - safeStake;
-
-    const classification = this.getTicketClassification();
 
     return {
       legsCount: this.legs.length,
@@ -353,11 +407,28 @@ export class ParlayEngine {
       expectedValuePct: Number(expectedValuePct.toFixed(2)),
       isPositiveEv,
       vigTaxPct: Number(vigTaxPct.toFixed(2)),
+      sportsbookCutPct: Number(vigTaxPct.toFixed(2)),
       naiveFairProbPct: Number((naiveFairProduct * 100).toFixed(2)),
       correlationBoostPct: Number(correlationBoostPct.toFixed(2)),
       potentialPayout: Number(potentialPayout.toFixed(2)),
       potentialProfit: Number(potentialProfit.toFixed(2)),
-      iterations
+      iterations,
+      ticketValue: {
+        badge: ticketValueBadge,
+        badgeClass: ticketValueBadgeClass,
+        color: ticketValueColor,
+        subtitle: ticketValueSubtitle,
+        evPct: Number(expectedValuePct.toFixed(2)),
+        sportsbookCutPct: Number(vigTaxPct.toFixed(2))
+      },
+      pickSynergy: {
+        header: synergyHeader,
+        text: synergyText,
+        detail: synergyDetail,
+        color: synergyColor,
+        status: synergyStatus,
+        boostPct: Number(correlationBoostPct.toFixed(2))
+      }
     };
   }
 

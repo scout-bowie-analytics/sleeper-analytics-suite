@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NFL Survivor & Pick'em Optimizer | Scout Bowie Analytics Suite</title>
   <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-  <link rel="stylesheet" href="css/styles.css?v=3.3.0">
+  <link rel="stylesheet" href="css/styles.css?v=3.4.0">
 
   <!-- OpenGraph / Social Metadata -->
   <meta property="og:title" content="NFL Survivor & Pick'em Optimizer | Scout Bowie Analytics Suite">
@@ -400,40 +400,40 @@
             </div>
           </div>
 
-          <!-- Quant Analytics Card -->
+          <!-- 10,000-Sim Analytics Card -->
           <div id="slipAnalyticsCard" class="slip-analytics-card" style="display:none;">
             
             <div class="slip-analytics-header">
-              <span style="color:var(--gold-bright);font-weight:800;font-size:11px;letter-spacing:0.05em;">🎲 10,000-RUN QUANT ANALYTICS</span>
+              <span style="color:var(--gold-bright);font-weight:800;font-size:11px;letter-spacing:0.05em;">🎲 10,000-SIM BREAKDOWN</span>
               <span id="slipSimStatusBadge" class="badge-sim-status">10k Monte Carlo</span>
             </div>
 
             <div class="analytics-metrics-grid">
               
-              <!-- Sim True Win Probability -->
+              <!-- Sim True Win Chance -->
               <div class="analytics-metric-box">
-                <div class="analytics-metric-label">True Win Probability</div>
+                <div class="analytics-metric-label">True Win Chance</div>
                 <div id="slipSimWinProb" class="analytics-metric-val" style="color:var(--cyan);">—</div>
                 <div id="slipFairOddsSub" class="analytics-metric-sub">Fair True Odds: —</div>
               </div>
 
-              <!-- Expected Value (+EV) Badge -->
+              <!-- Ticket Value Badge -->
               <div class="analytics-metric-box">
-                <div class="analytics-metric-label">Expected Value (+EV)</div>
+                <div class="analytics-metric-label">Ticket Value</div>
                 <div id="slipEvBadge" class="analytics-metric-val" style="color:var(--accent);">—</div>
-                <div id="slipVigSub" class="analytics-metric-sub">House Tax / Vig: —</div>
+                <div id="slipVigSub" class="analytics-metric-sub">Sportsbook Cut: —</div>
               </div>
 
             </div>
 
-            <!-- Correlation Lift Bar -->
+            <!-- Pick Synergy Section -->
             <div id="slipCorrelationSection" class="correlation-insight-box">
               <div class="correlation-header">
-                <span style="font-size:12px;">🧠 Correlated Game-Script Boost:</span>
-                <span id="slipCorrelationBoostVal" style="color:var(--gold-bright);font-weight:800;font-size:12px;">+0.00%</span>
+                <span style="font-size:12px;" id="slipSynergyHeaderLabel">🧠 Pick Synergy:</span>
+                <span id="slipCorrelationBoostVal" style="color:var(--gold-bright);font-weight:800;font-size:12px;">+0.0%</span>
               </div>
               <div id="slipCorrelationExplanation" class="correlation-desc">
-                Intra-game dependencies simulated simultaneously on synchronized scorelines.
+                Neutral: Independent games
               </div>
             </div>
 
@@ -478,6 +478,6 @@
   <div id="toast"></div>
 
   <!-- Main App Module -->
-  <script type="module" src="js/app.js?v=3.3.0"></script>
+  <script type="module" src="js/app.js?v=3.4.0"></script>
 </body>
 </html>

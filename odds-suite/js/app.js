@@ -1403,34 +1403,39 @@ class OddsSuiteApp {
     if (winProbEl) winProbEl.textContent = `${analytics.simWinProbPct}%`;
     if (fairOddsSubEl) fairOddsSubEl.textContent = `Fair True Odds: ${this.parlayEngine.formatAmerican(analytics.fairAmericanOdds)}`;
 
+    // 1. Ticket Value (Plain-English)
     if (evBadgeEl) {
-      const isPositive = analytics.isPositiveEv;
-      evBadgeEl.textContent = `${isPositive ? '+' : ''}${analytics.expectedValuePct}% +EV`;
-      evBadgeEl.style.color = isPositive ? 'var(--accent)' : 'var(--danger)';
+      evBadgeEl.textContent = analytics.ticketValue.badge;
+      evBadgeEl.style.color = analytics.ticketValue.color;
+      evBadgeEl.style.fontSize = '14px';
     }
 
     if (vigSubEl) {
-      vigSubEl.textContent = `House Vig Tax: ${analytics.vigTaxPct}% (Book Implied: ${analytics.bookImpliedProbPct}%)`;
+      vigSubEl.textContent = analytics.ticketValue.subtitle;
     }
 
+    // 2. Pick Synergy (Plain-English)
     if (boostValEl) {
       const boost = analytics.correlationBoostPct;
-      boostValEl.textContent = `${boost >= 0 ? '+' : ''}${boost}%`;
-      boostValEl.style.color = boost > 0 ? 'var(--gold-bright)' : (boost < 0 ? 'var(--danger)' : 'var(--text-dim)');
+      if (analytics.classification.isSgp) {
+        if (boost > 0.5) {
+          boostValEl.textContent = `+${boost.toFixed(1)}%`;
+          boostValEl.style.color = 'var(--gold-bright)';
+        } else if (boost < -0.5) {
+          boostValEl.textContent = `${boost.toFixed(1)}%`;
+          boostValEl.style.color = 'var(--danger)';
+        } else {
+          boostValEl.textContent = '0.0%';
+          boostValEl.style.color = 'var(--text-dim)';
+        }
+      } else {
+        boostValEl.textContent = 'Neutral';
+        boostValEl.style.color = 'var(--text-dim)';
+      }
     }
 
     if (boostDescEl) {
-      if (analytics.classification.isSgp) {
-        if (analytics.correlationBoostPct > 0) {
-          boostDescEl.textContent = `🚀 Positive Game-Script Lift! Joint win chance is ${analytics.correlationBoostPct}% higher than independent multiplication.`;
-        } else if (analytics.correlationBoostPct < 0) {
-          boostDescEl.textContent = `⚠️ Negative Correlation Penalty! Opposing game dynamics reduce joint probability by ${Math.abs(analytics.correlationBoostPct)}%.`;
-        } else {
-          boostDescEl.textContent = `Neutral correlation script across intra-game markets.`;
-        }
-      } else {
-        boostDescEl.textContent = `Independent multi-game ticket (Uncorrelated baseline fair product: ${analytics.naiveFairProbPct}%).`;
-      }
+      boostDescEl.textContent = analytics.pickSynergy.text;
     }
 
     if (totalPayoutEl) totalPayoutEl.textContent = `$${analytics.potentialPayout.toFixed(2)}`;
@@ -1454,23 +1459,24 @@ class OddsSuiteApp {
       this.parlayEngine.stake
     );
 
-    let text = `🐾 SCOUT BOWIE QUANT PARLAY TICKET\n`;
+    let text = `🐾 SCOUT BOWIE TICKET BREAKDOWN\n`;
     text += `Type: ${analytics.classification.label}\n`;
     text += `Stake: $${analytics.stake} ➔ Potential Payout: $${analytics.potentialPayout.toFixed(2)} (+$${analytics.potentialProfit.toFixed(2)} Profit)\n`;
     text += `Book Offered Odds: ${this.parlayEngine.formatAmerican(analytics.effectiveAmericanOdds)}\n`;
-    text += `Simulated True Win Prob: ${analytics.simWinProbPct}% (Fair Odds: ${this.parlayEngine.formatAmerican(analytics.fairAmericanOdds)})\n`;
-    text += `Expected Value: ${analytics.isPositiveEv ? '+' : ''}${analytics.expectedValuePct}% +EV | Vig Tax: ${analytics.vigTaxPct}%\n\n`;
+    text += `True Win Chance: ${analytics.simWinProbPct}% (Fair Odds: ${this.parlayEngine.formatAmerican(analytics.fairAmericanOdds)})\n`;
+    text += `Ticket Value: ${analytics.ticketValue.badge} (${analytics.ticketValue.subtitle})\n`;
+    text += `Pick Synergy: ${analytics.pickSynergy.text}\n\n`;
     text += `SELECTED LEGS (${analytics.legsCount}):\n`;
 
     this.parlayEngine.legs.forEach((l, idx) => {
       text += ` ${idx + 1}. [${l.marketCategory.toUpperCase()}] ${l.label} (${this.parlayEngine.formatAmerican(l.bookOdds)}) - ${l.matchup}\n`;
     });
 
-    text += `\nEngine: 10,000-Run Synchronized Monte Carlo via Scout Bowie Analytics Suite`;
+    text += `\nEngine: 10,000-Sim Breakdown via Scout Bowie Analytics Suite`;
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {
-        this.showToast('📋 Copied Bet Slip & EV Analysis to clipboard! 🐾');
+        this.showToast('📋 Copied Bet Slip & Ticket Breakdown to clipboard! 🐾');
       }).catch(() => {
         this.showToast('Copied bet slip to clipboard!');
       });
