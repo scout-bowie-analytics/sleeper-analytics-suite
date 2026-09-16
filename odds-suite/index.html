@@ -66,9 +66,8 @@
       <button class="view-tab" data-view="pickem" onclick="switchView('pickem')">
         <span>🎯 Pick'em Confidence Mode</span>
       </button>
-      <button class="view-tab disabled" data-view="parlay" onclick="switchView('parlay')">
-        <span>⚡ Parlay Engine</span>
-        <span class="badge-coming-soon">Soon</span>
+      <button class="view-tab" data-view="parlay" onclick="switchView('parlay')">
+        <span>⚡ Parlay & SGP Engine</span>
       </button>
     </div>
 
@@ -272,7 +271,183 @@
       </div>
     </div>
 
+    <!-- VIEW 3: PARLAY & SAME-GAME PARLAY (SGP) ENGINE -->
+    <div id="parlayView" style="display:none;">
+      <div class="parlay-layout">
+        
+        <!-- Left: Matchup Slate Area -->
+        <div class="parlay-slate-container">
+          
+          <!-- Parlay Slate Header Bar -->
+          <div class="matrix-card" style="margin-bottom:16px;padding:16px 20px;">
+            <div class="parlay-header-row">
+              <div class="parlay-header-info">
+                <div class="matrix-title" style="display:flex;align-items:center;gap:8px;">
+                  <span>⚡ Parlay & SGP Matchup Slate</span>
+                  <span id="parlaySlateWeekBadge" class="spotlight-tag tag-chalk" style="font-size:10px;margin:0;">WEEK 1</span>
+                </div>
+                <div class="parlay-header-sub">
+                  Select betting pills below to craft <b>Same-Game Parlays (SGPs)</b> or <b>Multi-Game Tickets</b>. The engine automatically captures correlated game scripts and computes un-vigged +EV edges via 10,000 Monte Carlo runs.
+                </div>
+              </div>
+
+              <!-- Market Filters -->
+              <div class="parlay-filter-group">
+                <button class="filter-chip active" data-filter="all" onclick="onParlayFilterSelect('all')">All Markets</button>
+                <button class="filter-chip" data-filter="spread" onclick="onParlayFilterSelect('spread')">Spreads</button>
+                <button class="filter-chip" data-filter="total" onclick="onParlayFilterSelect('total')">Totals (O/U)</button>
+                <button class="filter-chip" data-filter="moneyline" onclick="onParlayFilterSelect('moneyline')">Moneyline</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Matchup Grid -->
+          <div id="parlayMatchupGrid" class="parlay-matchup-grid">
+            <!-- Dynamically populated by app.js -->
+          </div>
+
+        </div>
+
+        <!-- Right: Bet Slip Drawer / Persistent Dock -->
+        <div id="betSlipDrawer" class="bet-slip-panel">
+          
+          <!-- Slip Header -->
+          <div class="bet-slip-header">
+            <div class="bet-slip-title-wrap">
+              <span style="font-size:18px;">⚡</span>
+              <div>
+                <div class="bet-slip-title">Bet Slip</div>
+                <div id="slipLegCountBadge" class="bet-slip-count">0 Legs Selected</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <button class="btn-clear-slip" onclick="clearBetSlip()" title="Clear all selections">
+                <span>🗑️ Clear</span>
+              </button>
+              <button class="btn-close-slip-mobile" onclick="toggleMobileBetSlip(false)" title="Close Slip">✕</button>
+            </div>
+          </div>
+
+          <!-- Dynamic Ticket Classification Banner -->
+          <div id="slipTicketTypeBanner" class="ticket-type-banner">
+            <div class="ticket-badge badge-empty">Empty Bet Slip</div>
+            <div class="ticket-badge-desc">Click any betting pill to build your ticket.</div>
+          </div>
+
+          <!-- Selected Legs Itemized List -->
+          <div id="slipLegsList" class="slip-legs-list">
+            <!-- Injected by app.js -->
+          </div>
+
+          <!-- Stake & Sportsbook Odds Configuration -->
+          <div id="slipOddsCard" class="slip-odds-card" style="display:none;">
+            <div class="slip-controls-row">
+              
+              <!-- Stake Input -->
+              <div class="slip-input-group">
+                <label class="slip-input-label">Stake Amount ($)</label>
+                <div class="slip-stake-wrap">
+                  <span class="slip-currency-prefix">$</span>
+                  <input type="number" id="slipStakeInput" class="slip-num-input" min="1" max="10000" step="5" value="10" oninput="onSlipStakeChange(this.value)">
+                </div>
+                <div class="slip-stake-presets">
+                  <button class="stake-preset-btn" onclick="setSlipStake(10)">$10</button>
+                  <button class="stake-preset-btn" onclick="setSlipStake(25)">$25</button>
+                  <button class="stake-preset-btn" onclick="setSlipStake(50)">$50</button>
+                  <button class="stake-preset-btn" onclick="setSlipStake(100)">$100</button>
+                </div>
+              </div>
+
+              <!-- Sportsbook Offered Odds Input (Editable for actual SGP books) -->
+              <div class="slip-input-group">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <label class="slip-input-label">Book Offered Odds</label>
+                  <button id="slipResetOddsBtn" class="slip-reset-odds-btn" onclick="resetSlipOfferedOdds()" style="display:none;" title="Reset to standard book multiplier">↺ Reset</button>
+                </div>
+                <div class="slip-odds-input-wrap">
+                  <input type="text" id="slipOfferedOddsInput" class="slip-num-input" placeholder="+260" onchange="onSlipOfferedOddsChange(this.value)">
+                </div>
+                <div style="font-size:10px;color:var(--muted);margin-top:2px;">
+                  Auto-calculated standard payout. Edit to match DraftKings / FanDuel SGP quote.
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Quant Analytics Card -->
+          <div id="slipAnalyticsCard" class="slip-analytics-card" style="display:none;">
+            
+            <div class="slip-analytics-header">
+              <span style="color:var(--gold-bright);font-weight:800;font-size:11px;letter-spacing:0.05em;">🎲 10,000-RUN QUANT ANALYTICS</span>
+              <span id="slipSimStatusBadge" class="badge-sim-status">10k Monte Carlo</span>
+            </div>
+
+            <div class="analytics-metrics-grid">
+              
+              <!-- Sim True Win Probability -->
+              <div class="analytics-metric-box">
+                <div class="analytics-metric-label">True Win Probability</div>
+                <div id="slipSimWinProb" class="analytics-metric-val" style="color:var(--cyan);">—</div>
+                <div id="slipFairOddsSub" class="analytics-metric-sub">Fair True Odds: —</div>
+              </div>
+
+              <!-- Expected Value (+EV) Badge -->
+              <div class="analytics-metric-box">
+                <div class="analytics-metric-label">Expected Value (+EV)</div>
+                <div id="slipEvBadge" class="analytics-metric-val" style="color:var(--accent);">—</div>
+                <div id="slipVigSub" class="analytics-metric-sub">House Tax / Vig: —</div>
+              </div>
+
+            </div>
+
+            <!-- Correlation Lift Bar -->
+            <div id="slipCorrelationSection" class="correlation-insight-box">
+              <div class="correlation-header">
+                <span style="font-size:12px;">🧠 Correlated Game-Script Boost:</span>
+                <span id="slipCorrelationBoostVal" style="color:var(--gold-bright);font-weight:800;font-size:12px;">+0.00%</span>
+              </div>
+              <div id="slipCorrelationExplanation" class="correlation-desc">
+                Intra-game dependencies simulated simultaneously on synchronized scorelines.
+              </div>
+            </div>
+
+            <!-- Potential Payout & Profit Summary -->
+            <div class="payout-summary-box">
+              <div class="payout-row">
+                <span style="color:var(--muted);">Total Return / Payout:</span>
+                <span id="slipTotalPayoutVal" class="payout-highlight" style="color:#fff;">$0.00</span>
+              </div>
+              <div class="payout-row" style="font-size:12px;margin-top:2px;">
+                <span style="color:var(--muted);">Estimated Net Profit:</span>
+                <span id="slipTotalProfitVal" style="color:var(--accent);font-weight:700;">+$0.00</span>
+              </div>
+            </div>
+
+            <!-- Actions Row -->
+            <div class="slip-actions-row">
+              <button class="btn-primary" style="flex:1;padding:9px 12px;font-size:12px;" onclick="resimulateBetSlip()">
+                <span>⚡ Resimulate 10k</span>
+              </button>
+              <button class="btn-secondary" style="flex:1;padding:9px 12px;font-size:12px;" onclick="copyParlayTicket()">
+                <span>📋 Copy Slip</span>
+              </button>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
   </div>
+
+  <!-- Floating Mobile Bet Slip Toggle Button -->
+  <button id="mobileSlipToggle" class="mobile-slip-btn" onclick="toggleMobileBetSlip(true)" style="display:none;">
+    <span>⚡ Bet Slip</span>
+    <span id="mobileSlipCountBadge" class="mobile-slip-badge">0</span>
+  </button>
 
   <!-- Toast Notification -->
   <div id="toast"></div>

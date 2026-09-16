@@ -4,10 +4,13 @@
  */
 
 import { SurvivorEngine } from './survivorEngine.js';
+import { ParlayEngine } from './parlayEngine.js';
 
 class OddsSuiteApp {
   constructor() {
     this.engine = new SurvivorEngine();
+    this.parlayEngine = new ParlayEngine();
+
     this.state = {
       slateData: [],
       activeWeek: 1,
@@ -20,7 +23,11 @@ class OddsSuiteApp {
       weeklySpotlight: null,
       pickemConfidence: null,
       simResults: null,
-      isSimulating: false
+      isSimulating: false,
+      // Parlay & SGP State
+      parlayFilter: 'all', // 'all' | 'spread' | 'total' | 'moneyline'
+      parlaySimResults: null,
+      isParlaySimulating: false
     };
 
     this.worker = null;
@@ -51,6 +58,8 @@ class OddsSuiteApp {
       this.worker = new Worker('js/simulationWorker.js?v=' + Date.now());
       this.worker.onmessage = (e) => {
         const { type, percent, results, error } = e.data;
+        
+        // 1. Survivor Sim Events
         if (type === 'progress') {
           this.updateSimProgress(percent);
         } else if (type === 'complete') {
@@ -62,9 +71,25 @@ class OddsSuiteApp {
           this.state.isSimulating = false;
           this.runSyncFallback();
         }
+
+        // 2. Parlay Sim Events
+        else if (type === 'parlay_progress') {
+          const badge = document.getElementById('slipSimStatusBadge');
+          if (badge) badge.textContent = `⚡ Simulating (${percent}%)...`;
+        } else if (type === 'parlay_complete') {
+          this.state.parlaySimResults = results;
+          this.state.isParlaySimulating = false;
+          this.renderBetSlip();
+        } else if (type === 'parlay_error') {
+          console.error('Worker parlay simulation error:', error);
+          this.state.isParlaySimulating = false;
+          this.runSyncParlayFallback();
+        }
       };
+
       this.worker.onerror = () => {
-        this.runSyncFallback();
+        if (this.state.isSimulating) this.runSyncFallback();
+        if (this.state.isParlaySimulating) this.runSyncParlayFallback();
       };
     } catch (e) {
       console.warn('Web Worker fallback:', e);
@@ -85,6 +110,19 @@ class OddsSuiteApp {
     window.copyPickemSheet = () => this.copyPickemSheet();
     window.triggerBowieEasterEgg = (el) => this.triggerBowieEasterEgg(el);
     window.showUsedTeamToast = (teamCode, week) => this.showUsedTeamToast(teamCode, week);
+
+    // Parlay & SGP Handlers
+    window.toggleParlayLeg = (legJson) => this.toggleParlayLeg(legJson);
+    window.removeParlayLeg = (legId) => this.removeParlayLeg(legId);
+    window.clearBetSlip = () => this.clearBetSlip();
+    window.onParlayFilterSelect = (filter) => this.onParlayFilterSelect(filter);
+    window.onSlipStakeChange = (val) => this.onSlipStakeChange(val);
+    window.setSlipStake = (val) => this.setSlipStake(val);
+    window.onSlipOfferedOddsChange = (val) => this.onSlipOfferedOddsChange(val);
+    window.resetSlipOfferedOdds = () => this.resetSlipOfferedOdds();
+    window.resimulateBetSlip = () => this.resimulateBetSlip();
+    window.copyParlayTicket = () => this.copyParlayTicket();
+    window.toggleMobileBetSlip = (isOpen) => this.toggleMobileBetSlip(isOpen);
   }
 
   showUsedTeamToast(teamCode, usedWeek) {
@@ -130,14 +168,10 @@ class OddsSuiteApp {
     this.renderWeeklySpotlight();
     this.renderWeeklySlateTable();
     this.renderPickemConfidenceTable();
+    this.renderParlaySlate();
   }
 
   switchView(view) {
-    if (view === 'parlay') {
-      this.showToast('⚡ Parlay Engine is coming in the next release! 🐾');
-      return;
-    }
-
     this.state.currentView = view;
     document.querySelectorAll('.view-tab').forEach(t => {
       t.classList.toggle('active', t.dataset.view === view);
@@ -145,10 +179,19 @@ class OddsSuiteApp {
 
     document.getElementById('survivorView').style.display = view === 'survivor' ? 'block' : 'none';
     document.getElementById('pickemView').style.display = view === 'pickem' ? 'block' : 'none';
+    document.getElementById('parlayView').style.display = view === 'parlay' ? 'block' : 'none';
 
     if (view === 'pickem') {
       this.renderPickemConfidenceTable();
+    } else if (view === 'parlay') {
+      this.renderParlaySlate();
+      this.renderBetSlip();
+      if (this.parlayEngine.legs.length > 0 && !this.state.parlaySimResults) {
+        this.resimulateBetSlip();
+      }
     }
+
+    this.renderHeaderAdvice();
   }
 
   toggleLockPick(week, teamCode) {
@@ -246,6 +289,7 @@ class OddsSuiteApp {
     if (this.worker) {
       try {
         this.worker.postMessage({
+          action: 'SIMULATE_SURVIVOR',
           path: this.state.currentPathResult.path,
           slateData: this.state.slateData,
           poolSize: this.state.poolSize,
@@ -397,6 +441,8 @@ class OddsSuiteApp {
     this.renderWeeklySlateTable();
     this.renderPathMatrix();
     this.renderSimulationResults();
+    this.renderParlaySlate();
+    this.renderBetSlip();
   }
 
   renderArsenalBar() {
@@ -424,6 +470,17 @@ class OddsSuiteApp {
     const adviceEl = document.getElementById('bowieSpeech');
     if (!adviceEl) return;
 
+    if (this.state.currentView === 'parlay') {
+      const legCount = this.parlayEngine.legs.length;
+      if (legCount === 0) {
+        adviceEl.textContent = `"Welcome to the Parlay & SGP Lab! Select spread, total, or moneyline pills to test correlated game scripts and find +EV edges." 🐾`;
+      } else {
+        const classification = this.parlayEngine.getTicketClassification();
+        adviceEl.textContent = `"Analyzing ${legCount}-leg ${classification.label} across 10,000 synchronized Monte Carlo iterations." 🦴`;
+      }
+      return;
+    }
+
     const size = this.state.poolSize;
     const horizon = this.state.currentPathResult?.targetHorizon || 11;
     let text = '';
@@ -448,149 +505,153 @@ class OddsSuiteApp {
     const formatEv = (val) => {
       if (val === undefined || val === null || val === '—') return '—';
       const num = Number(val);
-      return isNaN(num) ? `${val}` : `${num.toFixed(1)}x`;
+      return isNaN(num) ? '—' : (num >= 0 ? `+${num.toFixed(2)}` : `${num.toFixed(2)}`);
+    };
+
+    const renderCard = (data, title, tagClass, tagText, subText, borderClass) => {
+      if (!data || !data.team) {
+        return `
+          <div class="spotlight-card ${borderClass}">
+            <div class="spotlight-badge-row">
+              <span class="spotlight-title">${title}</span>
+              <span class="spotlight-tag ${tagClass}">${tagText}</span>
+            </div>
+            <div style="color:var(--muted);font-size:13px;margin:20px 0;">No active matchup for this category.</div>
+          </div>
+        `;
+      }
+
+      const team = data.team;
+      const opp = data.opponent || 'OPP';
+      const spread = data.spread !== undefined ? (data.spread > 0 ? `+${data.spread}` : `${data.spread}`) : '—';
+      const winProb = data.winProb !== undefined ? `${Math.round(data.winProb * 100)}%` : '—';
+      const pickPct = data.pickPct !== undefined ? `${(data.pickPct * 100).toFixed(1)}%` : '—';
+      const evVal = formatEv(data.expectedValue);
+
+      const isLocked = this.state.lockedPicks[this.state.activeWeek] === team;
+      const isOptimal = this.state.currentPathResult?.path?.some(p => p.week === this.state.activeWeek && p.teamCode === team);
+
+      return `
+        <div class="spotlight-card ${borderClass}">
+          <div class="spotlight-badge-row">
+            <span class="spotlight-title">${title}</span>
+            <span class="spotlight-tag ${tagClass}">${tagText}</span>
+          </div>
+          <div class="spotlight-team-row">
+            <div class="spotlight-team">${team}</div>
+            <div class="spotlight-matchup">vs ${opp} (${spread})</div>
+          </div>
+          <div class="spotlight-stats-grid">
+            <div class="spotlight-stat-box">
+              <div class="spotlight-stat-val">${winProb}</div>
+              <div class="spotlight-stat-lbl">Win Prob</div>
+            </div>
+            <div class="spotlight-stat-box">
+              <div class="spotlight-stat-val">${pickPct}</div>
+              <div class="spotlight-stat-lbl">Public Pick %</div>
+            </div>
+            <div class="spotlight-stat-box">
+              <div class="spotlight-stat-val" style="color:var(--accent);">${evVal}</div>
+              <div class="spotlight-stat-lbl">Pool EV</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;line-height:1.3;">
+            ${subText}
+          </div>
+          <button class="btn-lock ${isLocked ? 'locked' : ''}" onclick="toggleLockPick(${this.state.activeWeek}, '${team}')">
+            <span>${isLocked ? '🔒 Locked to Week ' + this.state.activeWeek : (isOptimal ? '⭐ Optimal Pick (Click to Lock)' : '🔒 Lock ' + team)}</span>
+          </button>
+        </div>
+      `;
     };
 
     container.innerHTML = `
-      <!-- Top Leverage Pick -->
-      <div class="spotlight-card card-leverage">
-        <span class="spotlight-tag tag-leverage">⚡ Top Leverage Pick</span>
-        <div class="spotlight-team-header">
-          <div>
-            <div class="spotlight-team-name">${leverage ? leverage.teamName : 'None'}</div>
-            <div class="spotlight-opp">${leverage ? (leverage.isHome ? 'vs' : '@') + ' ' + leverage.oppName + ' (' + (leverage.spread < 0 ? leverage.spread : '+' + leverage.spread) + ')' : '—'}</div>
-          </div>
-          <button class="btn-secondary" onclick="toggleLockPick(${this.state.activeWeek}, '${leverage ? leverage.teamCode : ''}')" style="font-size:11px;padding:3px 8px;">
-            ${this.state.lockedPicks[this.state.activeWeek] === (leverage ? leverage.teamCode : '') ? '🔒 Locked' : '🔒 Lock Pick'}
-          </button>
-        </div>
-        <div class="spotlight-metrics-grid">
-          <div>
-            <div class="spotlight-metric-val">${leverage ? (leverage.winProb * 100).toFixed(0) + '%' : '—'}</div>
-            <div class="spotlight-metric-lbl">Win Odds</div>
-          </div>
-          <div>
-            <div class="spotlight-metric-val" style="color:var(--accent);">${leverage ? formatEv(leverage.ev) : '—'}</div>
-            <div class="spotlight-metric-lbl">Expected Value</div>
-          </div>
-          <div>
-            <div class="spotlight-metric-val" style="color:var(--muted);">${leverage ? (leverage.pickPct * 100).toFixed(1) + '%' : '—'}</div>
-            <div class="spotlight-metric-lbl">Public Pick %</div>
-          </div>
-        </div>
-        <div class="spotlight-desc">High win probability paired with modest public pick share generates immense pool leverage.</div>
-      </div>
-
-      <!-- Chalk Pick -->
-      <div class="spotlight-card card-chalk">
-        <span class="spotlight-tag tag-chalk">🏆 Slate Chalk Favorite</span>
-        <div class="spotlight-team-header">
-          <div>
-            <div class="spotlight-team-name">${chalk ? chalk.teamName : 'None'}</div>
-            <div class="spotlight-opp">${chalk ? (chalk.isHome ? 'vs' : '@') + ' ' + chalk.oppName + ' (' + (chalk.spread < 0 ? chalk.spread : '+' + chalk.spread) + ')' : '—'}</div>
-          </div>
-          <button class="btn-secondary" onclick="toggleLockPick(${this.state.activeWeek}, '${chalk ? chalk.teamCode : ''}')" style="font-size:11px;padding:3px 8px;">
-            ${this.state.lockedPicks[this.state.activeWeek] === (chalk ? chalk.teamCode : '') ? '🔒 Locked' : '🔒 Lock Pick'}
-          </button>
-        </div>
-        <div class="spotlight-metrics-grid">
-          <div>
-            <div class="spotlight-metric-val" style="color:var(--gold);">${chalk ? (chalk.winProb * 100).toFixed(0) + '%' : '—'}</div>
-            <div class="spotlight-metric-lbl">Win Odds</div>
-          </div>
-          <div>
-            <div class="spotlight-metric-val">${chalk ? formatEv(chalk.ev) : '—'}</div>
-            <div class="spotlight-metric-lbl">Expected Value</div>
-          </div>
-          <div>
-            <div class="spotlight-metric-val">${chalk ? (chalk.pickPct * 100).toFixed(1) + '%' : '—'}</div>
-            <div class="spotlight-metric-lbl">Public Pick %</div>
-          </div>
-        </div>
-        <div class="spotlight-desc">Safest raw survival odds on the board. Optimal for small pools and guaranteed progression.</div>
-      </div>
-
-      <!-- Trap Pick -->
-      <div class="spotlight-card card-trap">
-        <span class="spotlight-tag tag-trap">⚠️ Contrarian Trap Alert</span>
-        <div class="spotlight-team-header">
-          <div>
-            <div class="spotlight-team-name">${trap ? trap.teamName : 'None'}</div>
-            <div class="spotlight-opp">${trap ? (trap.isHome ? 'vs' : '@') + ' ' + trap.oppName + ' (' + (trap.spread < 0 ? trap.spread : '+' + trap.spread) + ')' : '—'}</div>
-          </div>
-          <button class="btn-secondary" onclick="toggleExcludeTeam('${trap ? trap.teamCode : ''}')" style="font-size:11px;padding:3px 8px;color:var(--danger);">
-            ${this.state.excludedTeams.has(trap ? trap.teamCode : '') ? '🚫 Excluded' : '🚫 Exclude'}
-          </button>
-        </div>
-        <div class="spotlight-metrics-grid">
-          <div>
-            <div class="spotlight-metric-val">${trap ? (trap.winProb * 100).toFixed(0) + '%' : '—'}</div>
-            <div class="spotlight-metric-lbl">Win Odds</div>
-          </div>
-          <div>
-            <div class="spotlight-metric-val" style="color:var(--danger);">${trap ? formatEv(trap.ev) : '—'}</div>
-            <div class="spotlight-metric-lbl">Expected Value</div>
-          </div>
-          <div>
-            <div class="spotlight-metric-val" style="color:var(--danger);">${trap ? (trap.pickPct * 100).toFixed(1) + '%' : '—'}</div>
-            <div class="spotlight-metric-lbl">Public Pick %</div>
-          </div>
-        </div>
-        <div class="spotlight-desc">${trap ? (trap.winProb <= 0.70 ? 'Heavy public ownership with noticeable upset risk. A loss here knocks out a huge fraction of the pool.' : 'Popular favorite carrying elevated ownership. Fading here creates substantial pool leverage.') : 'No high-risk chalk trap detected on this slate.'}</div>
-      </div>
+      ${renderCard(leverage, '⚡ Top Leverage Play', 'tag-leverage', 'HIGH EV', 'High win probability with low national ownership to leapfrog opponents.', 'card-leverage')}
+      ${renderCard(chalk, '🛡️ Chalk / Consensus Safe', 'tag-chalk', 'CONSENSUS', 'Heavy favorite pick to maximize raw survival probability.', 'card-chalk')}
+      ${renderCard(trap, '⚠️ Trap Game Alert', 'tag-trap', 'FADE RISK', 'Dangerously over-owned by public relative to true moneyline win probability.', 'card-trap')}
     `;
   }
 
   renderWeeklySlateTable() {
-    const container = document.getElementById('weeklySlateBody');
-    if (!container || !this.state.weeklySpotlight) return;
+    const tbody = document.getElementById('weeklySlateBody');
+    if (!tbody || !this.state.slateData) return;
 
-    const picks = this.state.weeklySpotlight.all;
-    const currentWeekPick = this.state.currentPathResult?.path.find(p => p.week === this.state.activeWeek)?.teamCode;
+    const weekData = this.state.slateData.find(s => s.week === this.state.activeWeek);
+    if (!weekData || !weekData.games) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">No slate data available for Week ${this.state.activeWeek}.</td></tr>`;
+      return;
+    }
 
-    container.innerHTML = picks.map(p => {
-      const isPathPick = currentWeekPick === p.teamCode;
-      const isLocked = this.state.lockedPicks[this.state.activeWeek] === p.teamCode;
-      const isExcluded = this.state.excludedTeams.has(p.teamCode);
+    const teamRows = [];
+    weekData.games.forEach(g => {
+      const homeSpread = g.spread;
+      const awaySpread = -homeSpread;
+      const fvHome = this.engine.calculateFutureValue(g.homeTeam, this.state.activeWeek, this.state.slateData, this.state.currentPathResult?.targetHorizon || 11);
+      const fvAway = this.engine.calculateFutureValue(g.awayTeam, this.state.activeWeek, this.state.slateData, this.state.currentPathResult?.targetHorizon || 11);
 
-      // Check if user has locked this team in a different week
-      let lockedOtherWeek = null;
-      Object.entries(this.state.lockedPicks).forEach(([w, team]) => {
-        if (team === p.teamCode && parseInt(w, 10) !== this.state.activeWeek) {
-          lockedOtherWeek = w;
-        }
+      teamRows.push({
+        team: g.homeTeam,
+        opp: `@ ${g.awayTeam}`,
+        spread: homeSpread > 0 ? `+${homeSpread}` : `${homeSpread}`,
+        winProb: g.homeWinProb,
+        pickPct: g.homePickPct,
+        ev: this.engine.calculateSingleGameEV(g.homeWinProb, g.homePickPct, this.state.poolSize),
+        futureValue: fvHome
       });
 
-      const loc = p.isHome ? 'vs' : '@';
-      const spreadStr = p.spread < 0 ? `${p.spread}` : `+${p.spread}`;
+      teamRows.push({
+        team: g.awayTeam,
+        opp: `vs ${g.homeTeam}`,
+        spread: awaySpread > 0 ? `+${awaySpread}` : `${awaySpread}`,
+        winProb: g.awayWinProb,
+        pickPct: g.awayPickPct,
+        ev: this.engine.calculateSingleGameEV(g.awayWinProb, g.awayPickPct, this.state.poolSize),
+        futureValue: fvAway
+      });
+    });
+
+    teamRows.sort((a, b) => b.ev - a.ev);
+
+    tbody.innerHTML = teamRows.map(row => {
+      const isLocked = this.state.lockedPicks[this.state.activeWeek] === row.team;
+      const isExcluded = this.state.excludedTeams.has(row.team);
+      const isOptimal = this.state.currentPathResult?.path?.some(p => p.week === this.state.activeWeek && p.teamCode === row.team);
+
+      let rowClass = '';
+      if (isLocked) rowClass = 'row-locked';
+      else if (isOptimal) rowClass = 'row-optimal';
+      else if (isExcluded) rowClass = 'row-excluded';
 
       return `
-        <tr style="${isPathPick ? 'background: rgba(245, 158, 11, 0.08); font-weight:700;' : ''}">
+        <tr class="${rowClass}">
           <td style="font-weight:800;color:#fff;">
-            ${p.teamCode} <span style="font-size:11px;color:var(--muted);font-weight:400;">(${p.teamName})</span>
-            ${isPathPick ? '<span class="spotlight-tag tag-chalk" style="margin-left:6px;font-size:9px;padding:1px 5px;">PATH PICK</span>' : ''}
-            ${lockedOtherWeek ? `<span class="badge-team-locked" style="margin-left:6px;font-size:9px;">🔒 LOCKED W${lockedOtherWeek}</span>` : ''}
+            <span>${row.team}</span>
+            ${isLocked ? '<span style="font-size:11px;margin-left:4px;">🔒</span>' : ''}
+            ${isOptimal && !isLocked ? '<span style="font-size:11px;margin-left:4px;">⭐</span>' : ''}
           </td>
-          <td>${loc} ${p.oppCode}</td>
-          <td style="font-family:var(--font-mono);">${spreadStr}</td>
+          <td style="color:var(--text-dim);">${row.opp}</td>
+          <td style="font-family:var(--font-mono);">${row.spread}</td>
           <td>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="font-family:var(--font-mono);min-width:34px;">${(p.winProb * 100).toFixed(0)}%</span>
-              <div style="flex:1;height:5px;background:var(--panel2);border-radius:3px;overflow:hidden;">
-                <div style="width:${p.winProb * 100}%;height:100%;background:${p.winProb >= 0.70 ? 'var(--accent)' : (p.winProb >= 0.55 ? 'var(--gold)' : 'var(--danger)')};"></div>
-              </div>
-            </div>
+            <span style="font-weight:700;color:${row.winProb >= 0.75 ? 'var(--accent)' : (row.winProb >= 0.6 ? 'var(--gold-bright)' : 'var(--text-dim)')};">
+              ${(row.winProb * 100).toFixed(0)}%
+            </span>
           </td>
-          <td style="font-family:var(--font-mono);">${(p.pickPct * 100).toFixed(1)}%</td>
-          <td style="font-family:var(--font-mono);font-weight:800;color:${p.ev >= 1.2 ? 'var(--accent)' : (p.ev >= 0.8 ? 'var(--gold)' : 'var(--danger)')};">${p.ev.toFixed(1)}x</td>
-          <td style="font-family:var(--font-mono);color:var(--muted);">${p.futureValue}</td>
+          <td style="font-family:var(--font-mono);">${(row.pickPct * 100).toFixed(1)}%</td>
+          <td>
+            <span style="font-weight:800;color:${row.ev >= 1.2 ? 'var(--accent)' : (row.ev >= 1.0 ? 'var(--gold-bright)' : 'var(--danger)')};">
+              ${row.ev >= 0 ? '+' : ''}${row.ev.toFixed(2)}
+            </span>
+          </td>
+          <td style="color:var(--text-dim);font-size:12px;">${row.futureValue.toFixed(1)}</td>
           <td style="text-align:right;">
-            <button class="btn-secondary" onclick="toggleLockPick(${this.state.activeWeek}, '${p.teamCode}')" style="padding:2px 8px;font-size:11px;margin-right:4px;${isLocked ? 'background:rgba(16,185,129,0.25);border-color:var(--accent);color:#fff;' : ''}">
-              ${isLocked ? '🔒 Locked' : (lockedOtherWeek ? `Move W${lockedOtherWeek} 🔒` : 'Lock 🔒')}
-            </button>
-            <button class="btn-secondary" onclick="toggleExcludeTeam('${p.teamCode}')" style="padding:2px 8px;font-size:11px;color:${isExcluded ? 'var(--accent)' : 'var(--danger)'};">
-              ${isExcluded ? 'Include' : 'Exclude'}
-            </button>
+            <div style="display:inline-flex;gap:6px;">
+              <button class="btn-table-action ${isLocked ? 'active' : ''}" onclick="toggleLockPick(${this.state.activeWeek}, '${row.team}')" title="Lock ${row.team} to Week ${this.state.activeWeek}">
+                ${isLocked ? '🔓 Unlock' : '🔒 Lock'}
+              </button>
+              <button class="btn-table-action ${isExcluded ? 'active-exclude' : ''}" onclick="toggleExcludeTeam('${row.team}')" title="Exclude ${row.team}">
+                ${isExcluded ? '✅ Include' : '🚫 Fade'}
+              </button>
+            </div>
           </td>
         </tr>
       `;
@@ -598,106 +659,92 @@ class OddsSuiteApp {
   }
 
   renderPathMatrix() {
-    const headerRow = document.getElementById('matrixHeaderRow');
-    const tableBody = document.getElementById('matrixBody');
-    if (!headerRow || !tableBody || !this.state.slateData) return;
+    const theadRow = document.getElementById('matrixHeaderRow');
+    const tbody = document.getElementById('matrixBody');
+    if (!theadRow || !tbody || !this.state.slateData) return;
 
-    const horizonWeek = this.state.currentPathResult?.targetHorizon || 11;
-
-    let headersHtml = '<th class="team-col">TEAM</th>';
-    for (let w = 1; w <= 18; w++) {
-      const isFinishCol = w === horizonWeek;
-      headersHtml += `<th class="${isFinishCol ? 'matrix-finish-header' : ''}" title="${isFinishCol ? 'Expected Pool Finish Line (Week ' + w + ')' : 'Week ' + w}">W${w}</th>`;
-    }
-    headerRow.innerHTML = headersHtml;
-
-    const pathPickMap = {};
-    if (this.state.currentPathResult && this.state.currentPathResult.path) {
+    const horizon = this.state.currentPathResult?.targetHorizon || 11;
+    const optimalPathMap = {};
+    if (this.state.currentPathResult?.path) {
       this.state.currentPathResult.path.forEach(p => {
-        if (p.teamCode && p.teamCode !== '—') {
-          pathPickMap[p.week] = p.teamCode;
-        }
+        optimalPathMap[p.week] = p.teamCode;
       });
     }
 
-    const TEAMS_LIST = [
-      'KC', 'BAL', 'SF', 'DET', 'PHI', 'BUF', 'HOU', 'GB',
-      'CIN', 'DAL', 'MIA', 'LAR', 'ATL', 'NYJ', 'CHI', 'TB',
-      'PIT', 'JAX', 'IND', 'SEA', 'LAC', 'MIN', 'NO', 'CLE',
-      'WAS', 'ARI', 'LV', 'TEN', 'DEN', 'NYG', 'NE', 'CAR'
+    // Header: Team + W1-W18
+    let headerHtml = `<th style="width:70px;position:sticky;left:0;background:var(--panel);z-index:5;">Team</th>`;
+    for (let w = 1; w <= 18; w++) {
+      const isFinishLine = (w === horizon);
+      headerHtml += `
+        <th class="${isFinishLine ? 'col-finish-line' : ''}">
+          <div>W${w}</div>
+          ${isFinishLine ? '<div style="font-size:8px;color:var(--gold);font-weight:800;margin-top:1px;">🏁 FINISH</div>' : ''}
+        </th>
+      `;
+    }
+    theadRow.innerHTML = headerHtml;
+
+    // Collect all 32 NFL Teams
+    const teams = [
+      'ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','DET','GB',
+      'HOU','IND','JAX','KC','LAC','LAR','LV','MIA','MIN','NE','NO','NYG',
+      'NYJ','PHI','PIT','SEA','SF','TB','TEN','WAS'
     ];
 
-    tableBody.innerHTML = TEAMS_LIST.map(team => {
-      // Find if user has a manual lock for this team in any week
-      let lockedWeek = null;
-      Object.entries(this.state.lockedPicks).forEach(([w, t]) => {
-        if (t === team) lockedWeek = w;
-      });
-
-      const teamColBadge = lockedWeek
-        ? `<span class="badge-team-locked" title="User Locked in Week ${lockedWeek}">🔒 W${lockedWeek}</span>`
-        : '';
-
-      let rowHtml = `<td class="team-col">${team} ${teamColBadge}</td>`;
+    tbody.innerHTML = teams.map(team => {
+      let rowHtml = `
+        <td style="font-weight:800;position:sticky;left:0;background:var(--panel);z-index:4;color:#fff;border-right:1px solid var(--border);">
+          ${team}
+        </td>
+      `;
 
       for (let w = 1; w <= 18; w++) {
-        const game = this.engine.getTeamGame(team, w, this.state.slateData);
-        const isFinishCol = w === horizonWeek;
-        const isBeyond = w > horizonWeek;
+        const weekData = this.state.slateData.find(s => s.week === w);
+        let cellContent = '—';
+        let cellClass = '';
+        let titleTip = '';
 
-        if (!game || game.isBye) {
-          rowHtml += `<td class="cell-bye ${isFinishCol ? 'matrix-finish-col' : ''}" title="${team} Bye Week">—</td>`;
-          continue;
+        if (weekData && weekData.games) {
+          const game = weekData.games.find(g => g.homeTeam === team || g.awayTeam === team);
+          if (game) {
+            const isHome = game.homeTeam === team;
+            const opp = isHome ? game.awayTeam : game.homeTeam;
+            const spread = isHome ? game.spread : -game.spread;
+            const winProb = isHome ? game.homeWinProb : game.awayWinProb;
+
+            const isLockedThisWeek = this.state.lockedPicks[w] === team;
+            const isOptimalThisWeek = optimalPathMap[w] === team;
+            const isFinishLine = (w === horizon);
+
+            if (isLockedThisWeek) {
+              cellClass = 'cell-locked';
+              cellContent = `🔒 ${isHome ? '' : '@'}${opp}`;
+            } else if (isOptimalThisWeek) {
+              cellClass = 'cell-optimal';
+              cellContent = `⭐ ${isHome ? '' : '@'}${opp}`;
+            } else if (winProb >= 0.75) {
+              cellClass = 'cell-elite';
+              cellContent = `${isHome ? '' : '@'}${opp}`;
+            } else if (winProb >= 0.65) {
+              cellClass = 'cell-fav';
+              cellContent = `${isHome ? '' : '@'}${opp}`;
+            } else {
+              cellContent = `${isHome ? '' : '@'}${opp}`;
+            }
+
+            if (isFinishLine) {
+              cellClass += ' cell-finish-col';
+            }
+
+            titleTip = `${team} vs ${opp} (Week ${w}) | Spread: ${spread > 0 ? '+' + spread : spread} | Win Prob: ${Math.round(winProb * 100)}%`;
+          }
         }
 
-        const isUserLocked = this.state.lockedPicks[w] === team;
-        const isOptimalPath = pathPickMap[w] === team;
-        const prob = game.winProb;
-        const loc = game.isHome ? 'vs' : '@';
-
-        if (isUserLocked) {
-          // User-locked pick for this week (Emerald Green)
-          let lockClass = 'cell-locked';
-          if (isFinishCol) lockClass += ' matrix-finish-col';
-          const lockTitle = `Week ${w}: ${team} ${loc} ${game.oppCode} (${(prob * 100).toFixed(0)}% win odds) — 🔒 USER LOCKED (Click to Unlock)`;
-
-          rowHtml += `
-            <td class="${lockClass}" title="${lockTitle}" onclick="toggleLockPick(${w}, '${team}')" style="cursor:pointer;">
-              <div style="font-weight:700;">${(prob * 100).toFixed(0)}%</div>
-              <div style="font-size:9.5px;font-weight:800;opacity:0.95;">🔒 LOCKED</div>
-            </td>
-          `;
-        } else if (isOptimalPath) {
-          // AI Optimal Path suggestion (Gold outline)
-          let pickClass = 'cell-picked';
-          if (isFinishCol) pickClass += ' matrix-finish-col';
-          const pathTitle = `Week ${w}: ${team} ${loc} ${game.oppCode} (${(prob * 100).toFixed(0)}% win odds) — ⭐ OPTIMAL PATH (Click to Lock)`;
-
-          rowHtml += `
-            <td class="${pickClass}" title="${pathTitle}" onclick="toggleLockPick(${w}, '${team}')" style="cursor:pointer;">
-              <div style="font-weight:700;">${(prob * 100).toFixed(0)}%</div>
-              <div style="font-size:9.5px;font-weight:800;opacity:0.95;">⭐ PATH</div>
-            </td>
-          `;
-        } else {
-          // Clean, Vibrant Heatmap
-          let cellClass = 'cell-toss';
-          if (prob >= 0.75) cellClass = 'cell-elite';
-          else if (prob >= 0.65) cellClass = 'cell-fav';
-          else if (prob < 0.45) cellClass = 'cell-dog';
-
-          if (isFinishCol) cellClass += ' matrix-finish-col';
-          if (isBeyond) cellClass += ' cell-beyond-horizon';
-
-          const titleText = `Week ${w}: ${team} ${loc} ${game.oppCode} (${(prob * 100).toFixed(0)}% win odds, EV: ${this.engine.calculateEV(prob, game.pickPct, this.state.poolSize)}) — Click to Lock 🔒${isFinishCol ? ' 🏁 [EXPECTED POOL FINISH]' : ''}`;
-
-          rowHtml += `
-            <td class="${cellClass}" title="${titleText}" onclick="toggleLockPick(${w}, '${team}')" style="cursor:pointer;">
-              <div style="font-weight:700;">${(prob * 100).toFixed(0)}%</div>
-              <div style="font-size:9.5px;opacity:0.8;">${loc}${game.oppCode}</div>
-            </td>
-          `;
-        }
+        rowHtml += `
+          <td class="${cellClass}" title="${titleTip}" onclick="toggleLockPick(${w}, '${team}')">
+            ${cellContent}
+          </td>
+        `;
       }
 
       return `<tr>${rowHtml}</tr>`;
@@ -705,40 +752,41 @@ class OddsSuiteApp {
   }
 
   renderPickemConfidenceTable() {
-    const container = document.getElementById('pickemTableBody');
-    if (!container || !this.state.pickemConfidence) return;
+    const tbody = document.getElementById('pickemTableBody');
+    if (!tbody || !this.state.pickemConfidence) return;
 
-    container.innerHTML = this.state.pickemConfidence.map(g => {
-      const loc = g.isHome ? 'vs' : '@';
-      const spreadStr = g.spread < 0 ? `${g.spread}` : `+${g.spread}`;
+    const list = Array.isArray(this.state.pickemConfidence) 
+      ? this.state.pickemConfidence 
+      : (this.state.pickemConfidence.rankedGames || []);
 
-      let tierClass = 'tier-low';
-      if (g.confidence >= 12) tierClass = 'tier-high';
-      else if (g.confidence >= 6) tierClass = 'tier-mid';
+    if (list.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No Pick'em data available for Week ${this.state.activeWeek}.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = list.map(item => {
+      const spread = item.spread !== undefined ? (item.spread > 0 ? `+${item.spread}` : `${item.spread}`) : '—';
+      const winProb = item.winProb !== undefined ? `${Math.round(item.winProb * 100)}%` : '—';
+      const consensus = item.pickPct !== undefined ? `${(item.pickPct * 100).toFixed(1)}%` : (item.consensus !== undefined ? `${(item.consensus * 100).toFixed(1)}%` : '—');
+      const edge = item.edge !== undefined ? `${item.edge >= 0 ? '+' : ''}${item.edge}%` : (item.leverageEdge !== undefined ? `${item.leverageEdge >= 0 ? '+' : ''}${(item.leverageEdge * 100).toFixed(1)}%` : '—');
+      const points = item.confidence || item.confidencePoints || '—';
+      const pick = item.pickedTeam || item.selectedPick || '—';
+      const opp = item.oppTeam || item.opponent || '—';
 
       return `
         <tr>
-          <td>
-            <span class="confidence-badge ${tierClass}">${g.confidence}</span>
+          <td style="font-weight:800;color:var(--gold-bright);font-family:var(--font-mono);font-size:14px;">
+            ${points}
           </td>
           <td style="font-weight:800;color:#fff;">
-            ${g.pickedTeam} <span style="font-size:11px;color:var(--muted);font-weight:400;">(${g.pickedTeamName})</span>
+            ${pick}
           </td>
-          <td>${loc} ${g.oppTeam} <span style="font-size:11px;color:var(--muted);">(${g.oppTeamName})</span></td>
-          <td style="font-family:var(--font-mono);">${spreadStr}</td>
-          <td>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="font-family:var(--font-mono);min-width:34px;">${(g.winProb * 100).toFixed(0)}%</span>
-              <div style="flex:1;height:5px;background:var(--panel2);border-radius:3px;overflow:hidden;">
-                <div style="width:${g.winProb * 100}%;height:100%;background:${g.winProb >= 0.70 ? 'var(--accent)' : (g.winProb >= 0.55 ? 'var(--gold)' : 'var(--danger)')};"></div>
-              </div>
-            </div>
-          </td>
-          <td style="font-family:var(--font-mono);">${(g.pickPct * 100).toFixed(1)}%</td>
-          <td>
-            ${g.isLeveragePlay 
-              ? `<span class="spotlight-tag tag-leverage" style="font-size:9.5px;margin:0;">⚡ +${g.edge}% EDGE</span>`
-              : `<span style="color:var(--muted);font-size:11.5px;">Standard Chalk</span>`}
+          <td style="color:var(--text-dim);">${opp}</td>
+          <td style="font-family:var(--font-mono);">${spread}</td>
+          <td style="font-weight:700;color:var(--accent);">${winProb}</td>
+          <td style="font-family:var(--font-mono);">${consensus}</td>
+          <td style="font-weight:700;color:${(item.edge >= 8.0 || item.leverageEdge >= 0.08) ? 'var(--cyan)' : 'var(--muted)'};">
+            ${edge}
           </td>
         </tr>
       `;
@@ -780,6 +828,551 @@ class OddsSuiteApp {
     if (oddsSubEl) oddsSubEl.textContent = `Odds of making it through Week ${roundedFinish} without a single loss`;
   }
 
+  // ==========================================
+  // ⚡ PARLAY & SAME-GAME PARLAY (SGP) CONTROLLER
+  // ==========================================
+
+  onParlayFilterSelect(filter) {
+    this.state.parlayFilter = filter;
+    document.querySelectorAll('.filter-chip').forEach(c => {
+      c.classList.toggle('active', c.dataset.filter === filter);
+    });
+    this.renderParlaySlate();
+  }
+
+  toggleParlayLeg(leg) {
+    if (!leg) return;
+    const result = this.parlayEngine.toggleLeg(leg);
+
+    if (result.action === 'added') {
+      this.showToast(`⚡ Added ${leg.label} to Bet Slip!`);
+    } else if (result.action === 'removed') {
+      this.showToast(`🗑️ Removed ${leg.label} from Bet Slip.`);
+    } else if (result.action === 'replaced') {
+      this.showToast(`🔄 Replaced ${result.replacedLeg?.label || 'previous leg'} with ${leg.label}!`);
+    }
+
+    this.renderParlaySlate();
+    this.renderBetSlip();
+    this.resimulateBetSlip();
+  }
+
+  removeParlayLeg(legId) {
+    const removed = this.parlayEngine.removeLeg(legId);
+    if (removed) {
+      this.showToast(`🗑️ Removed ${removed.label} from Bet Slip.`);
+    }
+    this.renderParlaySlate();
+    this.renderBetSlip();
+    this.resimulateBetSlip();
+  }
+
+  clearBetSlip() {
+    this.parlayEngine.clearSlip();
+    this.state.parlaySimResults = null;
+    this.renderParlaySlate();
+    this.renderBetSlip();
+    this.showToast('🗑️ Cleared all legs from Bet Slip.');
+  }
+
+  onSlipStakeChange(val) {
+    const stake = parseFloat(val) || 10;
+    this.parlayEngine.stake = Math.max(1, stake);
+    this.renderBetSlip();
+  }
+
+  setSlipStake(stake) {
+    this.parlayEngine.stake = Number(stake) || 10;
+    const input = document.getElementById('slipStakeInput');
+    if (input) input.value = this.parlayEngine.stake;
+    this.renderBetSlip();
+  }
+
+  onSlipOfferedOddsChange(val) {
+    const cleanStr = String(val).trim().replace('+', '');
+    const num = parseInt(cleanStr, 10);
+    if (!isNaN(num) && num !== 0) {
+      this.parlayEngine.customOfferedOdds = num;
+      this.showToast(`Updated Sportsbook Offer: ${this.parlayEngine.formatAmerican(num)} 🎯`);
+    } else {
+      this.parlayEngine.customOfferedOdds = null;
+    }
+    this.renderBetSlip();
+  }
+
+  resetSlipOfferedOdds() {
+    this.parlayEngine.customOfferedOdds = null;
+    this.showToast('Reset to standard bookmaker multiplier. ↺');
+    this.renderBetSlip();
+  }
+
+  resimulateBetSlip() {
+    if (this.parlayEngine.legs.length === 0) {
+      this.state.parlaySimResults = null;
+      this.renderBetSlip();
+      return;
+    }
+
+    this.state.isParlaySimulating = true;
+    const badge = document.getElementById('slipSimStatusBadge');
+    if (badge) badge.textContent = '⚡ Simulating 10,000 Runs...';
+
+    if (this.worker) {
+      try {
+        this.worker.postMessage({
+          action: 'SIMULATE_PARLAY',
+          legs: this.parlayEngine.legs,
+          slateData: this.state.slateData,
+          iterations: 10000
+        });
+        return;
+      } catch (e) {
+        console.warn('Worker parlay sim postMessage failed, falling back to sync:', e);
+      }
+    }
+
+    this.runSyncParlayFallback();
+  }
+
+  runSyncParlayFallback() {
+    setTimeout(() => {
+      const results = this.parlayEngine.runSyncSimulation(this.state.slateData, 10000);
+      this.state.parlaySimResults = results;
+      this.state.isParlaySimulating = false;
+      this.renderBetSlip();
+    }, 20);
+  }
+
+  renderParlaySlate() {
+    const grid = document.getElementById('parlayMatchupGrid');
+    const badge = document.getElementById('parlaySlateWeekBadge');
+    if (!grid || !this.state.slateData) return;
+
+    if (badge) badge.textContent = `WEEK ${this.state.activeWeek}`;
+
+    const weekData = this.state.slateData.find(s => s.week === this.state.activeWeek);
+    if (!weekData || !weekData.games || weekData.games.length === 0) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted);">No games scheduled for Week ${this.state.activeWeek}.</div>`;
+      return;
+    }
+
+    const filter = this.state.parlayFilter || 'all';
+
+    grid.innerHTML = weekData.games.map(g => {
+      const homeSpread = Number(g.spread);
+      const awaySpread = -homeSpread;
+      const homeSpreadFormatted = homeSpread > 0 ? `+${homeSpread}` : `${homeSpread}`;
+      const awaySpreadFormatted = awaySpread > 0 ? `+${awaySpread}` : `${awaySpread}`;
+      const spreadOdds = g.spreadOdds ?? -110;
+
+      const total = Number(g.total || 44.0);
+      const overOdds = g.totalOverOdds ?? -110;
+      const underOdds = g.totalUnderOdds ?? -110;
+
+      const homeMl = g.homeMoneyline ?? -110;
+      const awayMl = g.awayMoneyline ?? 110;
+
+      // Leg Object definitions for interactive pill bindings
+      const awaySpreadLeg = {
+        id: `${g.id}_spread_${g.awayTeam}`,
+        gameId: g.id,
+        week: this.state.activeWeek,
+        homeTeam: g.homeTeam,
+        awayTeam: g.awayTeam,
+        team: g.awayTeam,
+        selection: g.awayTeam,
+        marketType: 'spread',
+        marketCategory: 'spread',
+        lineValue: awaySpread,
+        bookOdds: spreadOdds,
+        label: `${g.awayTeam} ${awaySpreadFormatted}`,
+        matchup: `${g.awayTeam} @ ${g.homeTeam}`
+      };
+
+      const homeSpreadLeg = {
+        id: `${g.id}_spread_${g.homeTeam}`,
+        gameId: g.id,
+        week: this.state.activeWeek,
+        homeTeam: g.homeTeam,
+        awayTeam: g.awayTeam,
+        team: g.homeTeam,
+        selection: g.homeTeam,
+        marketType: 'spread',
+        marketCategory: 'spread',
+        lineValue: homeSpread,
+        bookOdds: spreadOdds,
+        label: `${g.homeTeam} ${homeSpreadFormatted}`,
+        matchup: `${g.awayTeam} @ ${g.homeTeam}`
+      };
+
+      const overLeg = {
+        id: `${g.id}_total_over`,
+        gameId: g.id,
+        week: this.state.activeWeek,
+        homeTeam: g.homeTeam,
+        awayTeam: g.awayTeam,
+        team: 'OVER',
+        selection: 'OVER',
+        marketType: 'total_over',
+        marketCategory: 'total',
+        lineValue: total,
+        bookOdds: overOdds,
+        label: `OVER ${total}`,
+        matchup: `${g.awayTeam} @ ${g.homeTeam}`
+      };
+
+      const underLeg = {
+        id: `${g.id}_total_under`,
+        gameId: g.id,
+        week: this.state.activeWeek,
+        homeTeam: g.homeTeam,
+        awayTeam: g.awayTeam,
+        team: 'UNDER',
+        selection: 'UNDER',
+        marketType: 'total_under',
+        marketCategory: 'total',
+        lineValue: total,
+        bookOdds: underOdds,
+        label: `UNDER ${total}`,
+        matchup: `${g.awayTeam} @ ${g.homeTeam}`
+      };
+
+      const awayMlLeg = {
+        id: `${g.id}_ml_${g.awayTeam}`,
+        gameId: g.id,
+        week: this.state.activeWeek,
+        homeTeam: g.homeTeam,
+        awayTeam: g.awayTeam,
+        team: g.awayTeam,
+        selection: g.awayTeam,
+        marketType: 'moneyline',
+        marketCategory: 'moneyline',
+        lineValue: null,
+        bookOdds: awayMl,
+        label: `${g.awayTeam} ML`,
+        matchup: `${g.awayTeam} @ ${g.homeTeam}`
+      };
+
+      const homeMlLeg = {
+        id: `${g.id}_ml_${g.homeTeam}`,
+        gameId: g.id,
+        week: this.state.activeWeek,
+        homeTeam: g.homeTeam,
+        awayTeam: g.awayTeam,
+        team: g.homeTeam,
+        selection: g.homeTeam,
+        marketType: 'moneyline',
+        marketCategory: 'moneyline',
+        lineValue: null,
+        bookOdds: homeMl,
+        label: `${g.homeTeam} ML`,
+        matchup: `${g.awayTeam} @ ${g.homeTeam}`
+      };
+
+      // Check active state for each pill
+      const isAwaySpreadActive = this.parlayEngine.hasLeg(awaySpreadLeg.id);
+      const isHomeSpreadActive = this.parlayEngine.hasLeg(homeSpreadLeg.id);
+      const isOverActive = this.parlayEngine.hasLeg(overLeg.id);
+      const isUnderActive = this.parlayEngine.hasLeg(underLeg.id);
+      const isAwayMlActive = this.parlayEngine.hasLeg(awayMlLeg.id);
+      const isHomeMlActive = this.parlayEngine.hasLeg(homeMlLeg.id);
+
+      const encodeLeg = (obj) => encodeURIComponent(JSON.stringify(obj));
+
+      return `
+        <div class="parlay-card" data-game-id="${g.id}">
+          
+          <div class="parlay-card-header">
+            <div class="parlay-teams-matchup">
+              <span class="parlay-team-tag"><span class="team-dot"></span>${g.awayTeam}</span>
+              <span style="color:var(--muted);font-weight:400;font-size:12px;">@</span>
+              <span class="parlay-team-tag"><span class="team-dot" style="background:var(--cyan);"></span>${g.homeTeam}</span>
+            </div>
+            <div class="parlay-matchup-meta">
+              <span class="parlay-meta-badge">O/U ${total}</span>
+              <span class="parlay-meta-badge">${g.homeTeam} ${homeSpreadFormatted}</span>
+            </div>
+          </div>
+
+          <div class="market-rows">
+            
+            <!-- Spread Market -->
+            ${(filter === 'all' || filter === 'spread') ? `
+              <div class="market-row-item">
+                <div class="market-row-label">
+                  <span>Point Spread</span>
+                  <span>Spread Line</span>
+                </div>
+                <div class="market-pill-group">
+                  <button class="market-pill ${isAwaySpreadActive ? 'selected' : ''}" onclick="toggleParlayLeg(JSON.parse(decodeURIComponent('${encodeLeg(awaySpreadLeg)}')))">
+                    <span class="pill-team-line">
+                      ${isAwaySpreadActive ? '<span class="pill-check">✓</span>' : ''}
+                      <span>${g.awayTeam} ${awaySpreadFormatted}</span>
+                    </span>
+                    <span class="pill-odds">${this.parlayEngine.formatAmerican(spreadOdds)}</span>
+                  </button>
+
+                  <button class="market-pill ${isHomeSpreadActive ? 'selected' : ''}" onclick="toggleParlayLeg(JSON.parse(decodeURIComponent('${encodeLeg(homeSpreadLeg)}')))">
+                    <span class="pill-team-line">
+                      ${isHomeSpreadActive ? '<span class="pill-check">✓</span>' : ''}
+                      <span>${g.homeTeam} ${homeSpreadFormatted}</span>
+                    </span>
+                    <span class="pill-odds">${this.parlayEngine.formatAmerican(spreadOdds)}</span>
+                  </button>
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Total (Over / Under) Market -->
+            ${(filter === 'all' || filter === 'total') ? `
+              <div class="market-row-item">
+                <div class="market-row-label">
+                  <span>Game Total (O/U)</span>
+                  <span>Line: ${total} Pts</span>
+                </div>
+                <div class="market-pill-group">
+                  <button class="market-pill ${isOverActive ? 'selected' : ''}" onclick="toggleParlayLeg(JSON.parse(decodeURIComponent('${encodeLeg(overLeg)}')))">
+                    <span class="pill-team-line">
+                      ${isOverActive ? '<span class="pill-check">✓</span>' : ''}
+                      <span>OVER ${total}</span>
+                    </span>
+                    <span class="pill-odds">${this.parlayEngine.formatAmerican(overOdds)}</span>
+                  </button>
+
+                  <button class="market-pill ${isUnderActive ? 'selected' : ''}" onclick="toggleParlayLeg(JSON.parse(decodeURIComponent('${encodeLeg(underLeg)}')))">
+                    <span class="pill-team-line">
+                      ${isUnderActive ? '<span class="pill-check">✓</span>' : ''}
+                      <span>UNDER ${total}</span>
+                    </span>
+                    <span class="pill-odds">${this.parlayEngine.formatAmerican(underOdds)}</span>
+                  </button>
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Moneyline Market -->
+            ${(filter === 'all' || filter === 'moneyline') ? `
+              <div class="market-row-item">
+                <div class="market-row-label">
+                  <span>Moneyline (Win Straight Up)</span>
+                  <span>Vegas ML</span>
+                </div>
+                <div class="market-pill-group">
+                  <button class="market-pill ${isAwayMlActive ? 'selected' : ''}" onclick="toggleParlayLeg(JSON.parse(decodeURIComponent('${encodeLeg(awayMlLeg)}')))">
+                    <span class="pill-team-line">
+                      ${isAwayMlActive ? '<span class="pill-check">✓</span>' : ''}
+                      <span>${g.awayTeam} ML</span>
+                    </span>
+                    <span class="pill-odds">${this.parlayEngine.formatAmerican(awayMl)}</span>
+                  </button>
+
+                  <button class="market-pill ${isHomeMlActive ? 'selected' : ''}" onclick="toggleParlayLeg(JSON.parse(decodeURIComponent('${encodeLeg(homeMlLeg)}')))">
+                    <span class="pill-team-line">
+                      ${isHomeMlActive ? '<span class="pill-check">✓</span>' : ''}
+                      <span>${g.homeTeam} ML</span>
+                    </span>
+                    <span class="pill-odds">${this.parlayEngine.formatAmerican(homeMl)}</span>
+                  </button>
+                </div>
+              </div>
+            ` : ''}
+
+          </div>
+
+        </div>
+      `;
+    }).join('');
+  }
+
+  renderBetSlip() {
+    const legs = this.parlayEngine.legs;
+    const legCountBadge = document.getElementById('slipLegCountBadge');
+    const mobileCountBadge = document.getElementById('mobileSlipCountBadge');
+    const mobileSlipToggle = document.getElementById('mobileSlipToggle');
+    const banner = document.getElementById('slipTicketTypeBanner');
+    const legsContainer = document.getElementById('slipLegsList');
+    const oddsCard = document.getElementById('slipOddsCard');
+    const analyticsCard = document.getElementById('slipAnalyticsCard');
+
+    // Update Counts
+    const countText = `${legs.length} ${legs.length === 1 ? 'Leg Selected' : 'Legs Selected'}`;
+    if (legCountBadge) legCountBadge.textContent = countText;
+    if (mobileCountBadge) mobileCountBadge.textContent = String(legs.length);
+    if (mobileSlipToggle) mobileSlipToggle.style.display = legs.length > 0 ? 'inline-flex' : 'none';
+
+    // Update Ticket Type Classification Banner
+    const classification = this.parlayEngine.getTicketClassification();
+    if (banner) {
+      banner.innerHTML = `
+        <div class="ticket-badge ${classification.badgeClass}">${classification.label}</div>
+        <div class="ticket-badge-desc">${classification.desc || 'Click any betting pill to build your ticket.'}</div>
+      `;
+    }
+
+    // Render Itemized Leg List
+    if (legsContainer) {
+      if (legs.length === 0) {
+        legsContainer.innerHTML = `
+          <div class="slip-empty-state">
+            <span style="font-size:24px;">🐾</span>
+            <span>Your Bet Slip is currently empty.</span>
+            <span style="font-size:11px;color:var(--muted-dark);">Select any spread, total, or moneyline pill from the matchup cards to calculate correlated SGP win odds & expected value!</span>
+          </div>
+        `;
+      } else {
+        legsContainer.innerHTML = legs.map(leg => {
+          let marketTag = 'SPREAD';
+          if (leg.marketCategory === 'total') marketTag = 'TOTAL';
+          if (leg.marketCategory === 'moneyline') marketTag = 'MONEYLINE';
+
+          return `
+            <div class="slip-leg-item">
+              <div class="slip-leg-info">
+                <div class="slip-leg-title">
+                  <span>${leg.label}</span>
+                  <span class="slip-leg-market-tag">${marketTag}</span>
+                </div>
+                <div class="slip-leg-matchup">${leg.matchup} • Week ${leg.week}</div>
+              </div>
+              <div class="slip-leg-right">
+                <span class="slip-leg-odds">${this.parlayEngine.formatAmerican(leg.bookOdds)}</span>
+                <button class="btn-remove-leg" onclick="removeParlayLeg('${leg.id}')" title="Remove selection">✕</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // Show or hide odds card and analytics card
+    if (legs.length === 0) {
+      if (oddsCard) oddsCard.style.display = 'none';
+      if (analyticsCard) analyticsCard.style.display = 'none';
+      return;
+    }
+
+    if (oddsCard) oddsCard.style.display = 'block';
+    if (analyticsCard) analyticsCard.style.display = 'flex';
+
+    // Compute quantitative analytics
+    const analytics = this.parlayEngine.calculateAnalytics(
+      this.state.parlaySimResults,
+      this.state.slateData,
+      this.parlayEngine.customOfferedOdds,
+      this.parlayEngine.stake
+    );
+
+    // Update Stake and Odds Inputs
+    const stakeInput = document.getElementById('slipStakeInput');
+    if (stakeInput && document.activeElement !== stakeInput) {
+      stakeInput.value = analytics.stake;
+    }
+
+    const oddsInput = document.getElementById('slipOfferedOddsInput');
+    const resetOddsBtn = document.getElementById('slipResetOddsBtn');
+    if (oddsInput && document.activeElement !== oddsInput) {
+      oddsInput.value = this.parlayEngine.formatAmerican(analytics.effectiveAmericanOdds);
+    }
+    if (resetOddsBtn) {
+      resetOddsBtn.style.display = analytics.isCustomOdds ? 'inline' : 'none';
+    }
+
+    // Update Analytics Card Elements
+    const winProbEl = document.getElementById('slipSimWinProb');
+    const fairOddsSubEl = document.getElementById('slipFairOddsSub');
+    const evBadgeEl = document.getElementById('slipEvBadge');
+    const vigSubEl = document.getElementById('slipVigSub');
+    const boostValEl = document.getElementById('slipCorrelationBoostVal');
+    const boostDescEl = document.getElementById('slipCorrelationExplanation');
+    const totalPayoutEl = document.getElementById('slipTotalPayoutVal');
+    const totalProfitEl = document.getElementById('slipTotalProfitVal');
+    const simStatusBadge = document.getElementById('slipSimStatusBadge');
+
+    if (simStatusBadge) {
+      simStatusBadge.textContent = this.state.isParlaySimulating ? '⚡ Simulating 10k...' : '10k Monte Carlo';
+    }
+
+    if (winProbEl) winProbEl.textContent = `${analytics.simWinProbPct}%`;
+    if (fairOddsSubEl) fairOddsSubEl.textContent = `Fair True Odds: ${this.parlayEngine.formatAmerican(analytics.fairAmericanOdds)}`;
+
+    if (evBadgeEl) {
+      const isPositive = analytics.isPositiveEv;
+      evBadgeEl.textContent = `${isPositive ? '+' : ''}${analytics.expectedValuePct}% +EV`;
+      evBadgeEl.style.color = isPositive ? 'var(--accent)' : 'var(--danger)';
+    }
+
+    if (vigSubEl) {
+      vigSubEl.textContent = `House Vig Tax: ${analytics.vigTaxPct}% (Book Implied: ${analytics.bookImpliedProbPct}%)`;
+    }
+
+    if (boostValEl) {
+      const boost = analytics.correlationBoostPct;
+      boostValEl.textContent = `${boost >= 0 ? '+' : ''}${boost}%`;
+      boostValEl.style.color = boost > 0 ? 'var(--gold-bright)' : (boost < 0 ? 'var(--danger)' : 'var(--text-dim)');
+    }
+
+    if (boostDescEl) {
+      if (analytics.classification.isSgp) {
+        if (analytics.correlationBoostPct > 0) {
+          boostDescEl.textContent = `🚀 Positive Game-Script Lift! Joint win chance is ${analytics.correlationBoostPct}% higher than independent multiplication.`;
+        } else if (analytics.correlationBoostPct < 0) {
+          boostDescEl.textContent = `⚠️ Negative Correlation Penalty! Opposing game dynamics reduce joint probability by ${Math.abs(analytics.correlationBoostPct)}%.`;
+        } else {
+          boostDescEl.textContent = `Neutral correlation script across intra-game markets.`;
+        }
+      } else {
+        boostDescEl.textContent = `Independent multi-game ticket (Uncorrelated baseline fair product: ${analytics.naiveFairProbPct}%).`;
+      }
+    }
+
+    if (totalPayoutEl) totalPayoutEl.textContent = `$${analytics.potentialPayout.toFixed(2)}`;
+    if (totalProfitEl) totalProfitEl.textContent = `+$${analytics.potentialProfit.toFixed(2)}`;
+  }
+
+  toggleMobileBetSlip(isOpen) {
+    const drawer = document.getElementById('betSlipDrawer');
+    if (drawer) {
+      drawer.classList.toggle('mobile-open', isOpen);
+    }
+  }
+
+  copyParlayTicket() {
+    if (this.parlayEngine.legs.length === 0) return;
+
+    const analytics = this.parlayEngine.calculateAnalytics(
+      this.state.parlaySimResults,
+      this.state.slateData,
+      this.parlayEngine.customOfferedOdds,
+      this.parlayEngine.stake
+    );
+
+    let text = `🐾 SCOUT BOWIE QUANT PARLAY TICKET\n`;
+    text += `Type: ${analytics.classification.label}\n`;
+    text += `Stake: $${analytics.stake} ➔ Potential Payout: $${analytics.potentialPayout.toFixed(2)} (+$${analytics.potentialProfit.toFixed(2)} Profit)\n`;
+    text += `Book Offered Odds: ${this.parlayEngine.formatAmerican(analytics.effectiveAmericanOdds)}\n`;
+    text += `Simulated True Win Prob: ${analytics.simWinProbPct}% (Fair Odds: ${this.parlayEngine.formatAmerican(analytics.fairAmericanOdds)})\n`;
+    text += `Expected Value: ${analytics.isPositiveEv ? '+' : ''}${analytics.expectedValuePct}% +EV | Vig Tax: ${analytics.vigTaxPct}%\n\n`;
+    text += `SELECTED LEGS (${analytics.legsCount}):\n`;
+
+    this.parlayEngine.legs.forEach((l, idx) => {
+      text += ` ${idx + 1}. [${l.marketCategory.toUpperCase()}] ${l.label} (${this.parlayEngine.formatAmerican(l.bookOdds)}) - ${l.matchup}\n`;
+    });
+
+    text += `\nEngine: 10,000-Run Synchronized Monte Carlo via Scout Bowie Analytics Suite`;
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        this.showToast('📋 Copied Bet Slip & EV Analysis to clipboard! 🐾');
+      }).catch(() => {
+        this.showToast('Copied bet slip to clipboard!');
+      });
+    }
+  }
+
+  // ==========================================
+  // UTILITIES & EXPORTERS
+  // ==========================================
+
   copySurvivorPath() {
     if (!this.state.currentPathResult) return;
     const text = this.engine.formatClipboardSurvivorPath(this.state.currentPathResult, {
@@ -817,7 +1410,7 @@ class OddsSuiteApp {
       "Woof! Math never lies — always fade the consensus trap!",
       "10,000 simulations completed in milliseconds. Golden bones for all!",
       "Survivor is a game of survival AND leverage. Play to win the whole pool!",
-      "Bark! Don't save elite teams for December if your pool ends in October."
+      "Bark! SGP correlation is the secret to capturing positive expected value!"
     ];
     const q = barkQuotes[Math.floor(Math.random() * barkQuotes.length)];
     this.showToast(q);
