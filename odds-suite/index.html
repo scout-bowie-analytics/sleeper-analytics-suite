@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NFL Survivor & Pick'em Optimizer | Scout Bowie Analytics Suite</title>
   <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-  <link rel="stylesheet" href="css/styles.css?v=3.2.0">
+  <link rel="stylesheet" href="css/styles.css?v=3.3.0">
 
   <!-- OpenGraph / Social Metadata -->
   <meta property="og:title" content="NFL Survivor & Pick'em Optimizer | Scout Bowie Analytics Suite">
@@ -235,33 +235,58 @@
 
     <!-- VIEW 2: PICK'EM CONFIDENCE MODE -->
     <div id="pickemView" style="display:none;">
+      
+      <!-- Pickem Top Control Bar: Mode Toggle & Subtitle -->
+      <div class="matrix-card" style="margin-bottom:16px;padding:16px 20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
+          <div>
+            <div class="matrix-title" style="display:flex;align-items:center;gap:8px;">
+              <span>🎯 Pick'em Pool Optimizer</span>
+              <span id="pickemModeBadge" class="spotlight-tag tag-leverage" style="font-size:10px;margin:0;">STRAIGHT UP (SU)</span>
+            </div>
+            <div id="pickemSubtitle" style="font-size:12px;color:var(--muted);margin-top:4px;">
+              Optimal 16-to-1 confidence point allocation maximizing pool EV based on Vegas moneyline win probability and national pick leverage.
+            </div>
+          </div>
+
+          <!-- SU vs ATS Mode Switcher & Copy Action -->
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <div class="strategy-btn-group" id="pickemModeSelector">
+              <button class="strategy-btn active" id="btnPickemSU" onclick="onPickemModeSelect('straight_up')" data-mode="straight_up">
+                <span>🏈 Straight Up (SU)</span>
+              </button>
+              <button class="strategy-btn" id="btnPickemATS" onclick="onPickemModeSelect('ats')" data-mode="ats">
+                <span>⚖️ Against the Spread (ATS)</span>
+              </button>
+            </div>
+            <button class="btn-secondary" onclick="copyPickemSheet()" title="Copy confidence picks to clipboard">
+              <span>📋 Copy Sheet</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pick'em Confidence Rankings Table -->
       <div class="matrix-card">
         <div class="matrix-header-row">
           <div>
-            <div class="matrix-title">
-              <span>🎯 Pick'em Confidence Rankings (16 to 1 Points)</span>
+            <div class="matrix-title" id="pickemTableTitle">
+              <span>📋 Week 1 Pick'em Confidence Table (16 down to 1)</span>
             </div>
-            <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">
-              Ranked from highest confidence (16 pts) to lowest (1 pt) based on Vegas win probability and leverage edges.
+            <div style="font-size:11.5px;color:var(--muted);margin-top:2px;" id="pickemTableSubtitle">
+              Higher point values assigned to safest favorites. Leverage plays highlight where the public is underweight.
             </div>
           </div>
-          <button class="btn-secondary" onclick="copyPickemSheet()">
-            <span>📋 Copy Pick'em Sheet</span>
-          </button>
+          <div id="pickemKeyLegend" style="display:flex;align-items:center;gap:12px;font-size:11px;flex-wrap:wrap;">
+            <span style="display:inline-flex;align-items:center;gap:4px;"><span style="color:var(--cyan);font-weight:800;">⚡ Leverage</span> Public Underweight</span>
+            <span style="display:inline-flex;align-items:center;gap:4px;"><span style="color:var(--gold-bright);font-weight:800;">⭐ High Confidence</span> Top Tier</span>
+          </div>
         </div>
 
         <div class="confidence-table-wrap">
           <table class="confidence-table">
-            <thead>
-              <tr>
-                <th style="width:70px;">Points</th>
-                <th>Selected Pick</th>
-                <th>Opponent</th>
-                <th>Spread</th>
-                <th>Win Probability</th>
-                <th>Public Consensus</th>
-                <th>Leverage Edge</th>
-              </tr>
+            <thead id="pickemThead">
+              <!-- Dynamically populated by app.js based on SU vs ATS mode -->
             </thead>
             <tbody id="pickemTableBody">
               <!-- Injected by app.js -->
@@ -453,6 +478,6 @@
   <div id="toast"></div>
 
   <!-- Main App Module -->
-  <script type="module" src="js/app.js?v=3.2.0"></script>
+  <script type="module" src="js/app.js?v=3.3.0"></script>
 </body>
 </html>

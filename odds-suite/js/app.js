@@ -17,6 +17,7 @@ class OddsSuiteApp {
       poolSize: 100,
       strategy: 'contrarian', // 'survival' | 'contrarian'
       currentView: 'survivor', // 'survivor' | 'pickem' | 'parlay'
+      pickemMode: 'straight_up', // 'straight_up' | 'ats'
       lockedPicks: {}, // { [week]: teamCode }
       excludedTeams: new Set(),
       currentPathResult: null,
@@ -101,6 +102,7 @@ class OddsSuiteApp {
     window.onPoolSizeInput = (val) => this.onPoolSizeInput(val);
     window.onStrategySelect = (strat) => this.onStrategySelect(strat);
     window.onWeekSelect = (week) => this.onWeekSelect(week);
+    window.onPickemModeSelect = (mode) => this.onPickemModeSelect(mode);
     window.switchView = (view) => this.switchView(view);
     window.toggleLockPick = (week, teamCode) => this.toggleLockPick(week, teamCode);
     window.toggleExcludeTeam = (teamCode) => this.toggleExcludeTeam(teamCode);
@@ -169,6 +171,28 @@ class OddsSuiteApp {
     this.renderWeeklySlateTable();
     this.renderPickemConfidenceTable();
     this.renderParlaySlate();
+  }
+
+  onPickemModeSelect(mode) {
+    this.state.pickemMode = mode;
+    document.querySelectorAll('#pickemModeSelector .strategy-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+
+    const badge = document.getElementById('pickemModeBadge');
+    const sub = document.getElementById('pickemSubtitle');
+    if (badge) {
+      badge.textContent = mode === 'ats' ? 'AGAINST THE SPREAD (ATS)' : 'STRAIGHT UP (SU)';
+      badge.className = `spotlight-tag ${mode === 'ats' ? 'tag-chalk' : 'tag-leverage'}`;
+    }
+    if (sub) {
+      sub.textContent = mode === 'ats'
+        ? 'Optimal 16-to-1 ATS confidence point allocation exploiting public favorite bias and sharp line-cover probabilities.'
+        : 'Optimal 16-to-1 confidence point allocation maximizing pool EV based on Vegas moneyline win probability and national pick leverage.';
+    }
+
+    this.recalculateWeeklyViews();
+    this.renderPickemConfidenceTable();
   }
 
   switchView(view) {
@@ -271,7 +295,11 @@ class OddsSuiteApp {
       targetHorizon: horizon
     });
 
-    this.state.pickemConfidence = this.engine.generatePickemConfidence(this.state.activeWeek, this.state.slateData);
+    this.state.pickemConfidence = this.engine.generatePickemConfidence(
+      this.state.activeWeek, 
+      this.state.slateData, 
+      this.state.pickemMode || 'straight_up'
+    );
   }
 
   runMonteCarloSim() {
@@ -757,26 +785,98 @@ class OddsSuiteApp {
   }
 
   renderPickemConfidenceTable() {
+    const thead = document.getElementById('pickemThead');
     const tbody = document.getElementById('pickemTableBody');
+    const titleEl = document.getElementById('pickemTableTitle');
+    const subEl = document.getElementById('pickemTableSubtitle');
     if (!tbody || !this.state.pickemConfidence) return;
+
+    const isATS = this.state.pickemMode === 'ats';
+
+    if (titleEl) {
+      titleEl.innerHTML = `<span>📋 Week ${this.state.activeWeek} Pick'em Confidence Rankings (${isATS ? 'Against the Spread' : 'Straight Up'})</span>`;
+    }
+    if (subEl) {
+      subEl.textContent = isATS
+        ? 'Ranked 16 down to 1 points based on point spread cover probability and contrarian ticket leverage.'
+        : 'Ranked 16 down to 1 points based on Vegas moneyline win probability and national pick ownership.';
+    }
+
+    if (thead) {
+      if (isATS) {
+        thead.innerHTML = `
+          <tr>
+            <th style="width:70px;">Points</th>
+            <th>Selected Pick (ATS)</th>
+            <th>Opponent</th>
+            <th>Spread Line</th>
+            <th>Cover Probability</th>
+            <th>Public ATS %</th>
+            <th>ATS Leverage Edge</th>
+            <th style="text-align:right;">Strategy Rating</th>
+          </tr>
+        `;
+      } else {
+        thead.innerHTML = `
+          <tr>
+            <th style="width:70px;">Points</th>
+            <th>Selected Pick (SU)</th>
+            <th>Opponent</th>
+            <th>Vegas Spread</th>
+            <th>Win Probability</th>
+            <th>Public Pick %</th>
+            <th>Leverage Edge</th>
+            <th style="text-align:right;">Strategy Rating</th>
+          </tr>
+        `;
+      }
+    }
 
     const list = Array.isArray(this.state.pickemConfidence) 
       ? this.state.pickemConfidence 
       : (this.state.pickemConfidence.rankedGames || []);
 
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No Pick'em data available for Week ${this.state.activeWeek}.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">No Pick'em data available for Week ${this.state.activeWeek}.</td></tr>`;
       return;
     }
 
     tbody.innerHTML = list.map(item => {
-      const spread = item.spread !== undefined ? (item.spread > 0 ? `+${item.spread}` : `${item.spread}`) : '—';
-      const winProb = item.winProb !== undefined ? `${Math.round(item.winProb * 100)}%` : '—';
-      const consensus = item.pickPct !== undefined ? `${(item.pickPct * 100).toFixed(1)}%` : (item.consensus !== undefined ? `${(item.consensus * 100).toFixed(1)}%` : '—');
-      const edge = item.edge !== undefined ? `${item.edge >= 0 ? '+' : ''}${item.edge}%` : (item.leverageEdge !== undefined ? `${item.leverageEdge >= 0 ? '+' : ''}${(item.leverageEdge * 100).toFixed(1)}%` : '—');
       const points = item.confidence || item.confidencePoints || '—';
       const pick = item.pickedTeam || item.selectedPick || '—';
       const opp = item.oppTeam || item.opponent || '—';
+      const spreadFormatted = item.spreadFormatted || (item.spread !== undefined ? (item.spread > 0 ? `+${item.spread}` : `${item.spread}`) : '—');
+      
+      const probVal = isATS 
+        ? (item.coverProb !== undefined ? `${(item.coverProb * 100).toFixed(1)}%` : '—')
+        : (item.winProb !== undefined ? `${Math.round(item.winProb * 100)}%` : '—');
+
+      const pubPct = item.publicPickPct !== undefined 
+        ? `${(item.publicPickPct * 100).toFixed(1)}%` 
+        : (item.pickPct !== undefined ? `${(item.pickPct * 100).toFixed(1)}%` : '—');
+
+      const edge = item.leverageEdge !== undefined 
+        ? `${item.leverageEdge >= 0 ? '+' : ''}${item.leverageEdge}%` 
+        : (item.edge !== undefined ? `${item.edge >= 0 ? '+' : ''}${item.edge}%` : '—');
+
+      const stratTag = item.stratTag || (item.isLeveragePlay ? '⚡ TOP LEVERAGE' : 'CHALK');
+      const stratClass = item.stratClass || (item.isLeveragePlay ? 'tag-leverage' : 'tag-chalk');
+
+      const pickDisplay = isATS ? `${pick} <span style="color:var(--gold);font-family:var(--font-mono);font-size:12px;margin-left:4px;">${spreadFormatted}</span>` : pick;
+      const oppDisplay = isATS 
+        ? `${item.isHome ? 'vs' : '@'} ${opp} <span style="color:var(--text-dim);font-family:var(--font-mono);font-size:11px;">(${item.oppSpreadFormatted || ''})</span>`
+        : `${item.isHome ? 'vs' : '@'} ${opp}`;
+
+      let probColor = 'var(--text-dim)';
+      if (isATS) {
+        if (item.coverProb >= 0.54) probColor = 'var(--accent)';
+        else if (item.coverProb >= 0.50) probColor = 'var(--gold-bright)';
+      } else {
+        if (item.winProb >= 0.75) probColor = 'var(--accent)';
+        else if (item.winProb >= 0.60) probColor = 'var(--gold-bright)';
+      }
+
+      const edgeColor = (item.leverageEdge >= 5.0 || item.edge >= 8.0) ? 'var(--cyan)' : (item.leverageEdge < -10.0 ? 'var(--danger)' : 'var(--muted)');
 
       return `
         <tr>
@@ -784,14 +884,17 @@ class OddsSuiteApp {
             ${points}
           </td>
           <td style="font-weight:800;color:#fff;">
-            ${pick}
+            ${pickDisplay}
           </td>
-          <td style="color:var(--text-dim);">${opp}</td>
-          <td style="font-family:var(--font-mono);">${spread}</td>
-          <td style="font-weight:700;color:var(--accent);">${winProb}</td>
-          <td style="font-family:var(--font-mono);">${consensus}</td>
-          <td style="font-weight:700;color:${(item.edge >= 8.0 || item.leverageEdge >= 0.08) ? 'var(--cyan)' : 'var(--muted)'};">
+          <td style="color:var(--text-dim);">${oppDisplay}</td>
+          <td style="font-family:var(--font-mono);font-size:12px;color:var(--text);">${spreadFormatted}</td>
+          <td style="font-weight:700;color:${probColor};">${probVal}</td>
+          <td style="font-family:var(--font-mono);">${pubPct}</td>
+          <td style="font-weight:700;color:${edgeColor};font-family:var(--font-mono);">
             ${edge}
+          </td>
+          <td style="text-align:right;">
+            <span class="spotlight-tag ${stratClass}" style="margin:0;font-size:10px;">${stratTag}</span>
           </td>
         </tr>
       `;
@@ -1395,11 +1498,12 @@ class OddsSuiteApp {
 
   copyPickemSheet() {
     if (!this.state.pickemConfidence) return;
-    const text = this.engine.formatClipboardPickem(this.state.pickemConfidence, this.state.activeWeek);
+    const isATS = this.state.pickemMode === 'ats';
+    const text = this.engine.formatClipboardPickem(this.state.pickemConfidence, this.state.activeWeek, this.state.pickemMode);
 
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text).then(() => {
-        this.showToast(`📋 Copied Week ${this.state.activeWeek} Pick'em Sheet to clipboard! 🐾`);
+        this.showToast(`📋 Copied Week ${this.state.activeWeek} ${isATS ? 'ATS' : 'SU'} Pick'em Sheet to clipboard! 🐾`);
       }).catch(() => {
         this.showToast('Copied pick\'em sheet to clipboard!');
       });

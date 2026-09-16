@@ -335,14 +335,161 @@ export class SurvivorEngine {
   }
 
   /**
-   * Pick'em Confidence Mode
+   * Approximate error function (erf)
    */
-  generatePickemConfidence(week, slateData) {
+  erf(x) {
+    const a1 =  0.254829592;
+    const a2 = -0.284496736;
+    const a3 =  1.421413741;
+    const a4 = -1.453152027;
+    const a5 =  1.061405429;
+    const p  =  0.3275911;
+
+    const sign = x < 0 ? -1 : 1;
+    const absX = Math.abs(x);
+    const t = 1.0 / (1.0 + p * absX);
+    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-absX * absX);
+    return sign * y;
+  }
+
+  /**
+   * Approximate inverse error function (erfinv)
+   */
+  erfinv(x) {
+    const a = 0.147;
+    const clampedX = Math.max(-0.9999, Math.min(0.9999, x));
+    const logTerm = Math.log(1 - clampedX * clampedX);
+    const term1 = 2 / (Math.PI * a) + logTerm / 2;
+    const innerSqrt = term1 * term1 - logTerm / a;
+    const sign = clampedX < 0 ? -1 : 1;
+    return sign * Math.sqrt(Math.max(0, Math.sqrt(innerSqrt) - term1));
+  }
+
+  /**
+   * Calculate point spread cover probability for Home and Away
+   */
+  calculateCoverProbability(homeWinProb, homeSpread) {
+    const clampedProb = Math.max(0.01, Math.min(0.99, homeWinProb));
+    const z = Math.SQRT2 * this.erfinv(2 * clampedProb - 1);
+    const projectedHomeMargin = 13.5 * z;
+    const deltaPoints = projectedHomeMargin + homeSpread;
+    const zCover = deltaPoints / 13.5;
+    const rawHomeCover = 0.5 * (1 + this.erf(zCover / Math.SQRT2));
+    
+    const homeCoverProb = Math.max(0.44, Math.min(0.58, rawHomeCover));
+    const awayCoverProb = 1.0 - homeCoverProb;
+
+    return {
+      homeCoverProb: Number(homeCoverProb.toFixed(4)),
+      awayCoverProb: Number(awayCoverProb.toFixed(4)),
+      projectedMargin: Number(projectedHomeMargin.toFixed(1)),
+      deltaPoints: Number(deltaPoints.toFixed(1))
+    };
+  }
+
+  /**
+   * Estimate public spread consensus ticket distribution
+   */
+  calculatePublicSpreadConsensus(homeWinProb, homeSpread) {
+    const isHomeFav = homeWinProb >= 0.50;
+    const favWinProb = isHomeFav ? homeWinProb : (1 - homeWinProb);
+    const favShare = 0.50 + 0.32 * ((favWinProb - 0.50) / 0.40);
+    const clampedFavShare = Math.max(0.51, Math.min(0.74, favShare));
+    const dogShare = 1.0 - clampedFavShare;
+
+    return {
+      homePublicATS: Number((isHomeFav ? clampedFavShare : dogShare).toFixed(4)),
+      awayPublicATS: Number((isHomeFav ? dogShare : clampedFavShare).toFixed(4))
+    };
+  }
+
+  /**
+   * Pick'em Confidence Mode (SU & ATS)
+   */
+  generatePickemConfidence(week, slateData, mode = 'straight_up') {
     const targetWeek = Number(week) || 1;
     const weekData = slateData.find(s => s.week === targetWeek);
     if (!weekData || !weekData.games) return [];
 
-    const games = weekData.games.map(g => {
+    if (mode === 'ats') {
+      const picks = weekData.games.map(g => {
+        const { homeCoverProb, awayCoverProb } = this.calculateCoverProbability(g.homeWinProb, g.spread);
+        const { homePublicATS, awayPublicATS } = this.calculatePublicSpreadConsensus(g.homeWinProb, g.spread);
+
+        const homeLeverage = homeCoverProb - homePublicATS;
+        const awayLeverage = awayCoverProb - awayPublicATS;
+
+        // Composite ATS Score: Cover Probability + Leverage Bonus
+        const homeScore = (homeCoverProb * 1.0) + (homeLeverage * 0.25);
+        const awayScore = (awayCoverProb * 1.0) + (awayLeverage * 0.25);
+
+        const pickHome = homeScore >= awayScore;
+        const pickedTeam = pickHome ? g.homeTeam : g.awayTeam;
+        const pickedTeamName = pickHome ? g.homeTeamName : g.awayTeamName;
+        const oppTeam = pickHome ? g.awayTeam : g.homeTeam;
+        const oppTeamName = pickHome ? g.awayTeamName : g.homeTeamName;
+        const pickedSpread = pickHome ? g.spread : -g.spread;
+        const oppSpread = -pickedSpread;
+        const coverProb = pickHome ? homeCoverProb : awayCoverProb;
+        const publicATS = pickHome ? homePublicATS : awayPublicATS;
+        const leverageEdge = Number(((coverProb - publicATS) * 100).toFixed(1));
+        const score = pickHome ? homeScore : awayScore;
+
+        const spreadFormatted = pickedSpread > 0 ? `+${pickedSpread}` : `${pickedSpread}`;
+        const oppSpreadFormatted = oppSpread > 0 ? `+${oppSpread}` : `${oppSpread}`;
+
+        let stratTag = 'BALANCED COVER';
+        let stratClass = 'tag-chalk';
+        if (leverageEdge >= 10.0) {
+          stratTag = '⚡ VALUE DOG';
+          stratClass = 'tag-leverage';
+        } else if (leverageEdge >= 4.0) {
+          stratTag = 'VALUE SPREAD';
+          stratClass = 'tag-leverage';
+        } else if (coverProb >= 0.54) {
+          stratTag = 'SHARP COVER';
+          stratClass = 'tag-chalk';
+        } else if (publicATS >= 0.68) {
+          stratTag = 'PUBLIC CHALK';
+          stratClass = 'tag-trap';
+        }
+
+        return {
+          id: g.id,
+          pickedTeam,
+          pickedTeamName,
+          oppTeam,
+          oppTeamName,
+          isHome: pickHome,
+          spread: pickedSpread,
+          spreadFormatted,
+          oppSpreadFormatted,
+          pickWithSpread: `${pickedTeam} ${spreadFormatted}`,
+          oppWithSpread: `${oppTeam} ${oppSpreadFormatted}`,
+          total: g.total,
+          winProb: pickHome ? g.homeWinProb : g.awayWinProb,
+          coverProb,
+          publicPickPct: publicATS,
+          leverageEdge,
+          score,
+          stratTag,
+          stratClass,
+          mode: 'ats',
+          isLeveragePlay: leverageEdge >= 5.0
+        };
+      });
+
+      picks.sort((a, b) => b.score - a.score);
+      const total = picks.length;
+      picks.forEach((p, idx) => {
+        p.confidence = total - idx;
+      });
+
+      return picks;
+    }
+
+    // Straight Up Mode (SU)
+    const picks = weekData.games.map(g => {
       const isHomeFav = g.homeWinProb >= g.awayWinProb;
       const pickedTeam = isHomeFav ? g.homeTeam : g.awayTeam;
       const pickedTeamName = isHomeFav ? g.homeTeamName : g.awayTeamName;
@@ -351,8 +498,21 @@ export class SurvivorEngine {
       const winProb = isHomeFav ? g.homeWinProb : g.awayWinProb;
       const pickPct = isHomeFav ? g.homePickPct : g.awayPickPct;
       const spread = isHomeFav ? g.spread : -g.spread;
-
+      const spreadFormatted = spread > 0 ? `+${spread}` : `${spread}`;
       const edge = Number(((winProb - pickPct) * 100).toFixed(1));
+
+      let stratTag = 'CONSENSUS CHALK';
+      let stratClass = 'tag-chalk';
+      if (edge >= 8.0 && winProb >= 0.58) {
+        stratTag = '⚡ TOP LEVERAGE';
+        stratClass = 'tag-leverage';
+      } else if (winProb >= 0.75) {
+        stratTag = 'ELITE LOCK';
+        stratClass = 'tag-chalk';
+      } else if (pickPct >= 0.85 && winProb < 0.65) {
+        stratTag = 'TRAP CONCERN';
+        stratClass = 'tag-trap';
+      }
 
       return {
         id: g.id,
@@ -362,22 +522,31 @@ export class SurvivorEngine {
         oppTeamName,
         isHome: isHomeFav,
         spread,
+        spreadFormatted,
+        pickWithSpread: `${pickedTeam} (${spreadFormatted})`,
+        oppWithSpread: `${oppTeam} (${spread > 0 ? '-' + spread : '+' + Math.abs(spread)})`,
         total: g.total,
         winProb,
-        pickPct,
-        edge,
+        coverProb: winProb,
+        publicPickPct: pickPct,
+        leverageEdge: edge,
+        stratTag,
+        stratClass,
+        mode: 'straight_up',
         isLeveragePlay: edge >= 8.0 && winProb >= 0.58
       };
     });
 
-    games.sort((a, b) => b.winProb - a.winProb);
+    gamesSort(picks);
+    return picks;
 
-    const totalGames = games.length;
-    games.forEach((g, idx) => {
-      g.confidence = totalGames - idx;
-    });
-
-    return games;
+    function gamesSort(list) {
+      list.sort((a, b) => b.winProb - a.winProb);
+      const totalGames = list.length;
+      list.forEach((g, idx) => {
+        g.confidence = totalGames - idx;
+      });
+    }
   }
 
   /**
@@ -407,16 +576,21 @@ export class SurvivorEngine {
     return text;
   }
 
-  formatClipboardPickem(confidenceList, week) {
+  formatClipboardPickem(confidenceList, week, mode = 'straight_up') {
     if (!confidenceList || confidenceList.length === 0) return '';
-    let text = `🐾 SCOUT BOWIE WEEK ${week} NFL PICK'EM CONFIDENCE SHEET\n`;
+    const isATS = mode === 'ats' || (confidenceList[0] && confidenceList[0].mode === 'ats');
+    let text = `🐾 SCOUT BOWIE WEEK ${week} NFL PICK'EM CONFIDENCE SHEET (${isATS ? 'AGAINST THE SPREAD - ATS' : 'STRAIGHT UP - SU'})\n`;
     text += `------------------------------------------------------------\n`;
 
     confidenceList.forEach(c => {
       const loc = c.isHome ? 'vs' : '@';
       const spreadStr = c.spread < 0 ? `${c.spread}` : `+${c.spread}`;
-      const edgeStr = c.isLeveragePlay ? ' ⚡[LEVERAGE VALUE]' : '';
-      text += `[${String(c.confidence).padStart(2)} pts] ${c.pickedTeam.padEnd(4)} (${loc} ${c.oppTeam}) | Spread: ${spreadStr} | Win: ${(c.winProb*100).toFixed(0)}%${edgeStr}\n`;
+      const edgeStr = c.isLeveragePlay ? ` ⚡[${c.stratTag || 'LEVERAGE'}]` : '';
+      if (isATS) {
+        text += `[${String(c.confidence).padStart(2)} pts] ${c.pickedTeam.padEnd(4)} (${spreadStr.padEnd(5)}) ${loc} ${c.oppTeam.padEnd(4)} | Cover: ${(c.coverProb*100).toFixed(1)}% | Pub ATS: ${(c.publicPickPct*100).toFixed(1)}% | Edge: ${c.leverageEdge >= 0 ? '+' : ''}${c.leverageEdge}%${edgeStr}\n`;
+      } else {
+        text += `[${String(c.confidence).padStart(2)} pts] ${c.pickedTeam.padEnd(4)} (${loc} ${c.oppTeam}) | Spread: ${spreadStr} | Win: ${(c.winProb*100).toFixed(0)}% | Pub: ${(c.publicPickPct*100).toFixed(1)}% | Edge: ${c.leverageEdge >= 0 ? '+' : ''}${c.leverageEdge}%${edgeStr}\n`;
+      }
     });
 
     text += `------------------------------------------------------------\n`;
