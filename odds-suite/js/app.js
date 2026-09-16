@@ -509,7 +509,8 @@ class OddsSuiteApp {
     };
 
     const renderCard = (data, title, tagClass, tagText, subText, borderClass) => {
-      if (!data || !data.team) {
+      const team = data?.teamCode || data?.team;
+      if (!data || !team) {
         return `
           <div class="spotlight-card ${borderClass}">
             <div class="spotlight-badge-row">
@@ -521,12 +522,11 @@ class OddsSuiteApp {
         `;
       }
 
-      const team = data.team;
-      const opp = data.opponent || 'OPP';
+      const opp = data.oppCode || data.oppTeam || data.opponent || 'OPP';
       const spread = data.spread !== undefined ? (data.spread > 0 ? `+${data.spread}` : `${data.spread}`) : '—';
       const winProb = data.winProb !== undefined ? `${Math.round(data.winProb * 100)}%` : '—';
       const pickPct = data.pickPct !== undefined ? `${(data.pickPct * 100).toFixed(1)}%` : '—';
-      const evVal = formatEv(data.expectedValue);
+      const evVal = formatEv(data.ev !== undefined ? data.ev : data.expectedValue);
 
       const isLocked = this.state.lockedPicks[this.state.activeWeek] === team;
       const isOptimal = this.state.currentPathResult?.path?.some(p => p.week === this.state.activeWeek && p.teamCode === team);
@@ -595,7 +595,7 @@ class OddsSuiteApp {
         spread: homeSpread > 0 ? `+${homeSpread}` : `${homeSpread}`,
         winProb: g.homeWinProb,
         pickPct: g.homePickPct,
-        ev: this.engine.calculateSingleGameEV(g.homeWinProb, g.homePickPct, this.state.poolSize),
+        ev: this.engine.calculateEV(g.homeWinProb, g.homePickPct, this.state.poolSize),
         futureValue: fvHome
       });
 
@@ -605,7 +605,7 @@ class OddsSuiteApp {
         spread: awaySpread > 0 ? `+${awaySpread}` : `${awaySpread}`,
         winProb: g.awayWinProb,
         pickPct: g.awayPickPct,
-        ev: this.engine.calculateSingleGameEV(g.awayWinProb, g.awayPickPct, this.state.poolSize),
+        ev: this.engine.calculateEV(g.awayWinProb, g.awayPickPct, this.state.poolSize),
         futureValue: fvAway
       });
     });

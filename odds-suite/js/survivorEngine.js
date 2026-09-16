@@ -36,6 +36,10 @@ export class SurvivorEngine {
     return Number(ev.toFixed(3));
   }
 
+  calculateSingleGameEV(pWin, pickShare, poolSize = 100) {
+    return this.calculateEV(pWin, pickShare, poolSize);
+  }
+
   /**
    * Future Value (FV) heuristic:
    * Sum of team's future win probabilities in games where P(Win) >= 65%
