@@ -12,11 +12,14 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 1. Verify API Key
-const apiKey = process.env.ODDS_API_KEY;
+// 1. Verify API Key (Environment variable or CLI argument)
+const apiKey = process.env.ODDS_API_KEY || 
+  process.argv.find(arg => arg.startsWith('--apiKey='))?.split('=')[1] ||
+  (process.argv[2] && !process.argv[2].startsWith('-') ? process.argv[2] : null);
+
 if (!apiKey) {
   console.error('❌ Error: ODDS_API_KEY environment variable is not set.');
-  console.error('👉 Please configure your The Odds API key in GitHub Secrets or set ODDS_API_KEY locally.');
+  console.error('👉 Please configure your The Odds API key in GitHub Secrets, set ODDS_API_KEY locally, or pass it as an argument: node scripts/fetch-live-odds.mjs <API_KEY>');
   process.exit(1);
 }
 
@@ -83,30 +86,24 @@ function americanToImplied(odds) {
   return 100 / (n + 100);
 }
 
-// 3. Locate Target nfl_slate.json Files
+// 3. Locate Target nfl_slate.json Files (Strictly resolves ./data/nfl_slate.json at root)
 function findSlateFilePaths() {
-  const candidates = [
-    path.resolve(process.cwd(), 'data/nfl_slate.json'),
-    path.resolve(process.cwd(), 'odds-suite/data/nfl_slate.json'),
-    path.resolve(__dirname, '../data/nfl_slate.json'),
-    path.resolve(__dirname, '../odds-suite/data/nfl_slate.json'),
-    path.resolve(__dirname, '../../data/nfl_slate.json'),
-    path.resolve(__dirname, '../../odds-suite/data/nfl_slate.json')
-  ];
+  const rootData = path.resolve(process.cwd(), 'data/nfl_slate.json');
+  const dirnameData = path.resolve(__dirname, '../data/nfl_slate.json');
+  const oddsSuiteData = path.resolve(process.cwd(), 'odds-suite/data/nfl_slate.json');
+  const dirnameOddsData = path.resolve(__dirname, '../odds-suite/data/nfl_slate.json');
 
+  const candidates = [rootData, dirnameData, oddsSuiteData, dirnameOddsData];
   const uniquePaths = Array.from(new Set(candidates));
-  const existing = uniquePaths.filter(p => fs.existsSync(p));
   
-  if (existing.length > 0) {
-    return existing;
+  const existing = uniquePaths.filter(p => fs.existsSync(p));
+  if (!existing.includes(rootData)) {
+    existing.unshift(rootData);
   }
-
-  // If none exist yet, default to root ./data/nfl_slate.json
-  const defaultPath = path.resolve(process.cwd(), 'data/nfl_slate.json');
-  return [defaultPath];
+  return existing;
 }
 
-// 4. Preferred Bookmaker Priority
+// 4. Preferred Bookmaker Priority (DraftKings > FanDuel > BetMGM > Consensus)
 const PREFERRED_BOOKMAKERS = [
   'draftkings',
   'fanduel',
@@ -125,6 +122,11 @@ function extractBestMarketData(game) {
     return null;
   }
 
+  const homeTeamName = game.home_team;
+  const awayTeamName = game.away_team;
+  const homeCode = normalizeTeamCode(homeTeamName);
+  const awayCode = normalizeTeamCode(awayTeamName);
+
   // Sort bookmakers by priority
   const sortedBooks = [...game.bookmakers].sort((a, b) => {
     const idxA = PREFERRED_BOOKMAKERS.indexOf(a.key);
@@ -133,9 +135,6 @@ function extractBestMarketData(game) {
     const scoreB = idxB === -1 ? 999 : idxB;
     return scoreA - scoreB;
   });
-
-  const homeTeamName = game.home_team;
-  const awayTeamName = game.away_team;
 
   let spread = null;
   let spreadOdds = -110;
@@ -153,7 +152,9 @@ function extractBestMarketData(game) {
     if (spread === null) {
       const spreadMarket = markets.find(m => m.key === 'spreads');
       if (spreadMarket && Array.isArray(spreadMarket.outcomes)) {
-        const homeOutcome = spreadMarket.outcomes.find(o => o.name === homeTeamName);
+        const homeOutcome = spreadMarket.outcomes.find(o => 
+          o.name === homeTeamName || normalizeTeamCode(o.name) === homeCode
+        );
         if (homeOutcome && homeOutcome.point !== undefined) {
           spread = Number(homeOutcome.point);
           spreadOdds = Number(homeOutcome.price) || -110;
@@ -166,8 +167,8 @@ function extractBestMarketData(game) {
     if (total === null) {
       const totalsMarket = markets.find(m => m.key === 'totals');
       if (totalsMarket && Array.isArray(totalsMarket.outcomes)) {
-        const overOutcome = totalsMarket.outcomes.find(o => o.name === 'Over');
-        const underOutcome = totalsMarket.outcomes.find(o => o.name === 'Under');
+        const overOutcome = totalsMarket.outcomes.find(o => o.name === 'Over' || o.name.toLowerCase() === 'over');
+        const underOutcome = totalsMarket.outcomes.find(o => o.name === 'Under' || o.name.toLowerCase() === 'under');
         if (overOutcome && overOutcome.point !== undefined) {
           total = Number(overOutcome.point);
           totalOverOdds = Number(overOutcome.price) || -110;
@@ -181,8 +182,12 @@ function extractBestMarketData(game) {
     if (homeMoneyline === null || awayMoneyline === null) {
       const h2hMarket = markets.find(m => m.key === 'h2h');
       if (h2hMarket && Array.isArray(h2hMarket.outcomes)) {
-        const homeOutcome = h2hMarket.outcomes.find(o => o.name === homeTeamName);
-        const awayOutcome = h2hMarket.outcomes.find(o => o.name === awayTeamName);
+        const homeOutcome = h2hMarket.outcomes.find(o => 
+          o.name === homeTeamName || normalizeTeamCode(o.name) === homeCode
+        );
+        const awayOutcome = h2hMarket.outcomes.find(o => 
+          o.name === awayTeamName || normalizeTeamCode(o.name) === awayCode
+        );
         if (homeOutcome && awayOutcome) {
           homeMoneyline = Number(homeOutcome.price);
           awayMoneyline = Number(awayOutcome.price);
@@ -191,7 +196,7 @@ function extractBestMarketData(game) {
       }
     }
 
-    // Stop if all found
+    // Stop if all found from highest priority bookmaker
     if (spread !== null && total !== null && homeMoneyline !== null && awayMoneyline !== null) {
       break;
     }
@@ -281,7 +286,7 @@ async function main() {
 
   console.log(`🎯 Normalized ${parsedGamesCount} live matchups ready for slate merging.\n`);
 
-  // 3. Update Each Slate File
+  // 3. Directly Mutate Each Slate File In Place & Save
   for (const slatePath of slatePaths) {
     let slateData;
     try {
@@ -292,63 +297,65 @@ async function main() {
       continue;
     }
 
-    let updatedCount = 0;
+    let updatedGamesCount = 0;
 
-    slateData.forEach(weekObj => {
-      if (!Array.isArray(weekObj.games)) return;
+    for (let w = 0; w < slateData.length; w++) {
+      const weekObj = slateData[w];
+      if (!Array.isArray(weekObj.games)) continue;
 
-      weekObj.games.forEach(g => {
-        const key = `${g.homeTeam}_${g.awayTeam}`;
-        if (!apiLookup.has(key)) return;
+      for (let g = 0; g < weekObj.games.length; g++) {
+        const targetGame = weekObj.games[g];
+        const key = `${targetGame.homeTeam}_${targetGame.awayTeam}`;
+        if (!apiLookup.has(key)) continue;
 
         const live = apiLookup.get(key);
         let modified = false;
 
-        // Update Spread
-        if (live.spread !== null) {
-          g.spread = live.spread;
-          g.spreadOdds = live.spreadOdds || -110;
+        // Direct in-place mutation: Spread
+        if (live.spread !== null && live.spread !== undefined) {
+          targetGame.spread = Number(live.spread);
+          targetGame.spreadOdds = Number(live.spreadOdds) || -110;
           modified = true;
         }
 
-        // Update Total
-        if (live.total !== null) {
-          g.total = live.total;
-          g.totalOverOdds = live.totalOverOdds || -110;
-          g.totalUnderOdds = live.totalUnderOdds || -110;
+        // Direct in-place mutation: Total
+        if (live.total !== null && live.total !== undefined) {
+          targetGame.total = Number(live.total);
+          targetGame.totalOverOdds = Number(live.totalOverOdds) || -110;
+          targetGame.totalUnderOdds = Number(live.totalUnderOdds) || -110;
           modified = true;
         }
 
-        // Update Moneylines & Calibrated Win Probabilities
-        if (live.homeMoneyline !== null && live.awayMoneyline !== null) {
-          g.homeMoneyline = live.homeMoneyline;
-          g.awayMoneyline = live.awayMoneyline;
+        // Direct in-place mutation: Moneyline & Win Probabilities
+        if (live.homeMoneyline !== null && live.awayMoneyline !== null && live.homeMoneyline !== undefined && live.awayMoneyline !== undefined) {
+          targetGame.homeMoneyline = Number(live.homeMoneyline);
+          targetGame.awayMoneyline = Number(live.awayMoneyline);
 
-          const hImp = americanToImplied(live.homeMoneyline);
-          const aImp = americanToImplied(live.awayMoneyline);
+          const hImp = americanToImplied(targetGame.homeMoneyline);
+          const aImp = americanToImplied(targetGame.awayMoneyline);
           const sumImp = hImp + aImp;
 
           if (sumImp > 0) {
-            g.homeWinProb = Number((hImp / sumImp).toFixed(2));
-            g.awayWinProb = Number((1 - g.homeWinProb).toFixed(2));
+            targetGame.homeWinProb = Number((hImp / sumImp).toFixed(2));
+            targetGame.awayWinProb = Number((1 - targetGame.homeWinProb).toFixed(2));
           }
           modified = true;
         }
 
         if (modified) {
-          updatedCount++;
-          console.log(`  🔄 [W${weekObj.week}] ${g.awayTeam} @ ${g.homeTeam} ➔ Spread: ${g.spread > 0 ? '+' + g.spread : g.spread} (${g.spreadOdds}) | Total: ${g.total} | ML: ${g.homeTeam} ${g.homeMoneyline > 0 ? '+' + g.homeMoneyline : g.homeMoneyline} / ${g.awayTeam} ${g.awayMoneyline > 0 ? '+' + g.awayMoneyline : g.awayMoneyline} [${live.bookmaker}]`);
+          updatedGamesCount++;
+          console.log(`  🔄 [Week ${weekObj.week}] ${targetGame.awayTeam} @ ${targetGame.homeTeam} ➔ Spread: ${targetGame.spread > 0 ? '+' + targetGame.spread : targetGame.spread} (${targetGame.spreadOdds}) | Total: ${targetGame.total} | ML: ${targetGame.homeTeam} ${targetGame.homeMoneyline > 0 ? '+' + targetGame.homeMoneyline : targetGame.homeMoneyline} / ${targetGame.awayTeam} ${targetGame.awayMoneyline > 0 ? '+' + targetGame.awayMoneyline : targetGame.awayMoneyline} [${live.bookmaker}]`);
         }
-      });
-    });
+      }
+    }
 
-    // Ensure target folder exists and write updated slate back to disk with 2-space indentation
+    // Ensure directory exists and write updated slate JSON directly back to target file
     const dir = path.dirname(slatePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
     fs.writeFileSync(slatePath, JSON.stringify(slateData, null, 2) + '\n', 'utf8');
-    console.log(`\n💾 Saved ${updatedCount} live odds updates to: ${slatePath}`);
+    console.log(`\n💾 Saved ${updatedGamesCount} live odds updates to: ${slatePath}`);
   }
 
   console.log('\n🎉 Live Odds Sync Complete! All lines synchronized successfully. 🐾');
