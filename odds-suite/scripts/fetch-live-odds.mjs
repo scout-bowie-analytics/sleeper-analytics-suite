@@ -305,15 +305,36 @@ async function main() {
 
       for (let g = 0; g < weekObj.games.length; g++) {
         const targetGame = weekObj.games[g];
-        const key = `${targetGame.homeTeam}_${targetGame.awayTeam}`;
-        if (!apiLookup.has(key)) continue;
+        
+        // Exact Two-Way Match or Inverted Neutral-Site Match Check:
+        const directKey = `${targetGame.homeTeam}_${targetGame.awayTeam}`;
+        const invertedKey = `${targetGame.awayTeam}_${targetGame.homeTeam}`;
 
-        const live = apiLookup.get(key);
+        let live = null;
+        let isInverted = false;
+
+        if (apiLookup.has(directKey)) {
+          live = apiLookup.get(directKey);
+          isInverted = false;
+        } else if (apiLookup.has(invertedKey)) {
+          live = apiLookup.get(invertedKey);
+          isInverted = true;
+        }
+
+        if (!live) continue;
+
+        // Verify BOTH teams match explicitly (Two-Way Matching)
+        const matchBothDirect = (targetGame.homeTeam === live.homeCode && targetGame.awayTeam === live.awayCode);
+        const matchBothInverted = (targetGame.homeTeam === live.awayCode && targetGame.awayTeam === live.homeCode);
+
+        if (!matchBothDirect && !matchBothInverted) continue;
+
         let modified = false;
 
-        // Direct in-place mutation: Spread
+        // Direct in-place mutation: Spread (Invert spread point if home/away is flipped by bookmaker)
         if (live.spread !== null && live.spread !== undefined) {
-          targetGame.spread = Number(live.spread);
+          const newSpread = isInverted ? -Number(live.spread) : Number(live.spread);
+          targetGame.spread = newSpread;
           targetGame.spreadOdds = Number(live.spreadOdds) || -110;
           modified = true;
         }
@@ -328,8 +349,11 @@ async function main() {
 
         // Direct in-place mutation: Moneyline & Win Probabilities
         if (live.homeMoneyline !== null && live.awayMoneyline !== null && live.homeMoneyline !== undefined && live.awayMoneyline !== undefined) {
-          targetGame.homeMoneyline = Number(live.homeMoneyline);
-          targetGame.awayMoneyline = Number(live.awayMoneyline);
+          const newHomeMl = isInverted ? Number(live.awayMoneyline) : Number(live.homeMoneyline);
+          const newAwayMl = isInverted ? Number(live.homeMoneyline) : Number(live.awayMoneyline);
+
+          targetGame.homeMoneyline = newHomeMl;
+          targetGame.awayMoneyline = newAwayMl;
 
           const hImp = americanToImplied(targetGame.homeMoneyline);
           const aImp = americanToImplied(targetGame.awayMoneyline);
