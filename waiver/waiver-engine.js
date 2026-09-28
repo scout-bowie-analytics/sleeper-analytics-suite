@@ -23,13 +23,17 @@ export class WaiverEngine {
 
     const sidelinedStatuses = new Set(['OUT', 'IR', 'PUP', 'DOUBTFUL', 'SUSPENDED', 'INACTIVE']);
 
-    // Step 1: Identify all sidelined starters (depth_chart_order: 1 or high projection starter)
+    // Step 1: Identify all sidelined starters (depth_chart_order: 1, known star names, or high projection starter)
     const sidelinedStarters = playersList.filter(p => {
       if (!p || !p.team || !p.position) return false;
       const status = (p.status || '').toUpperCase();
       const injStatus = (p.injury_status || '').toUpperCase();
-      const isSidelined = sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus);
-      const isStarter = p.depth_chart_order === 1 || (p.projected_pts && p.projected_pts >= 11.0);
+      const isSidelined = sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus) || p.active === false;
+      
+      const pNameLower = (p.full_name || p.name || '').toLowerCase();
+      const isKnownLead = ['achane', 'mccaffrey', 'breece hall', 'bijan', 'barkley', 'taylor', 'henry', 'williams', 'etienne', 'gibbs', 'pacheco', 'walker', 'cook', 'jacobs', 'kamara', 'nacua', 'chase', 'jefferson', 'lamb', 'st. brown'].some(n => pNameLower.includes(n));
+      const isStarter = p.depth_chart_order === 1 || (p.projected_pts && p.projected_pts >= 11.0) || isKnownLead || (p.search_rank && p.search_rank <= 60);
+
       return isSidelined && isStarter && ['RB', 'WR', 'TE'].includes(p.position);
     });
 
@@ -37,7 +41,20 @@ export class WaiverEngine {
     sidelinedStarters.forEach(starter => {
       const starterProj = weekProjections[starter.player_id] !== undefined
         ? Number(weekProjections[starter.player_id])
-        : (Number(starter.projected_pts) || 14.0);
+        : (Number(starter.projected_pts) || Number(starter.raw_projected_pts) || 14.5);
+
+      const notes = (starter.injury_notes || '').toLowerCase();
+      const status = (starter.status || '').toUpperCase();
+      const injStatus = (starter.injury_status || '').toUpperCase();
+      const isSeasonEnding = notes.includes('out for season') || notes.includes('out for the year') || 
+                             notes.includes('torn acl') || notes.includes('torn achilles') || 
+                             notes.includes('season-ending') || status === 'IR' || injStatus === 'IR';
+
+      const sNameLower = (starter.full_name || starter.name || '').toLowerCase();
+      const isEliteRb1 = (starter.position === 'RB') && (
+        starterProj >= 12.0 || starter.depth_chart_order === 1 || 
+        ['achane', 'mccaffrey', 'breece hall', 'bijan', 'barkley', 'taylor', 'henry', 'williams', 'etienne', 'gibbs'].some(n => sNameLower.includes(n))
+      );
 
       // Find active backups on same team & position
       const teamBackups = playersList.filter(p => 
@@ -52,14 +69,18 @@ export class WaiverEngine {
       teamBackups.sort((a, b) => (Number(a.depth_chart_order) || 99) - (Number(b.depth_chart_order) || 99));
 
       if (teamBackups.length > 0) {
+        // Primary Backup (e.g. Ollie Gordon / Jaylen Wright)
         const primaryBackup = teamBackups[0];
         let inheritedProj = 0;
         let roleDesc = '';
 
         if (starter.position === 'RB') {
-          // Running Back: Inherits 70% of starter baseline volume
-          inheritedProj = Math.max(12.2, Number((starterProj * 0.70).toFixed(1)));
-          roleDesc = `Inherited ${starter.full_name || 'RB1'} Lead Workload`;
+          // Running Back: Inherits 75% of starter baseline volume for season-ending, 70% for short-term
+          const sharePct = isSeasonEnding ? 0.75 : 0.70;
+          inheritedProj = Math.max(13.5, Number((starterProj * sharePct).toFixed(1)));
+          roleDesc = isSeasonEnding 
+            ? `Inherited ${starter.full_name || 'RB1'} Lead Workload (Season-Ending Takeover)`
+            : `Inherited ${starter.full_name || 'RB1'} Lead Workload`;
         } else if (starter.position === 'WR') {
           // Wide Receiver: Inherits 35% vacated target equity
           inheritedProj = Number(((weekProjections[primaryBackup.player_id] || primaryBackup.projected_pts || 7.0) + (starterProj * 0.35)).toFixed(1));
@@ -78,8 +99,32 @@ export class WaiverEngine {
           starterProj,
           inheritedProj,
           roleDesc,
-          isNextManUp: true
+          isNextManUp: true,
+          injuredPlayer: starter,
+          isSeasonEnding,
+          isEliteRb1
         });
+
+        // Also map secondary backups on same team (e.g. if multiple Miami backups exist)
+        if (teamBackups.length > 1) {
+          for (let i = 1; i < Math.min(3, teamBackups.length); i++) {
+            const secBackup = teamBackups[i];
+            const secProj = Number((starterProj * 0.45).toFixed(1));
+            inheritanceMap.set(String(secBackup.player_id), {
+              promotedPlayerId: String(secBackup.player_id),
+              starterName: starter.full_name || 'Starter',
+              starterPos: starter.position,
+              starterTeam: starter.team,
+              starterProj,
+              inheritedProj: secProj,
+              roleDesc: `Inherited ${starter.full_name || 'RB1'} Committee Equity`,
+              isNextManUp: true,
+              injuredPlayer: starter,
+              isSeasonEnding,
+              isEliteRb1: false
+            });
+          }
+        }
       }
     });
 
@@ -252,6 +297,71 @@ export class WaiverEngine {
   }
 
   /**
+   * Hard Drop Protection Rule
+   * Prevents suggesting dropping top draft capital (Rounds 1–6), high-value stars,
+   * and weekly anchors regardless of temporary injury status (OUT / QUES / DOUBTFUL).
+   * Only players officially on IR with season-ending designations are drop-eligible when IR slots are saturated.
+   */
+  isDropProtected(player) {
+    if (!player) return false;
+    const pos = (player.position || '').toUpperCase();
+    if (pos === 'K' || pos === 'DEF') {
+      return false; // K and DEF are never drop-protected streamers
+    }
+
+    const notes = (player.injury_notes || '').toLowerCase();
+    const isSeasonEnding = notes.includes('out for season') || notes.includes('out for the year') || 
+                           notes.includes('torn acl') || notes.includes('torn achilles') || 
+                           notes.includes('season-ending');
+
+    // Season-ending IR players without dynasty retention are not drop-protected
+    if (isSeasonEnding) {
+      return false;
+    }
+
+    const name = (player.full_name || player.name || '').toLowerCase().trim();
+
+    // 1. Explicit Elite Stars & Core Staples (Never drop: Puka Nacua, Travis Etienne, etc.)
+    const eliteNames = [
+      'nacua', 'puka', 'etienne', 'achane', 'jefferson', 'chase', 'lamb', 'st. brown',
+      'breece hall', 'bijan', 'mccaffrey', 'gibbs', 'barkley', 'jonathan taylor',
+      'derrick henry', 'kyren williams', 'josh allen', 'lamar jackson', 'hurts',
+      'mahomes', 'kelce', 'laporta', 'mcbride', 'garrett wilson', 'olave',
+      'drake london', 'nico collins', 'marvin harrison', 'nabers', 'devonta smith',
+      'aiyuk', 'dk metcalf', 'dj moore', 'kupp', 'waddle', 'kittle', 'andrews',
+      'kincaid', 'kenneth walker', 'james cook', 'josh jacobs', 'mixon', 'kamara',
+      'rachaad white', 'pacheco', 'david montgomery', 'deebo samuel', 'mclaurin',
+      'tee higgins', 'amari cooper', 'pickens', 'rashee rice', 'brian thomas',
+      'kyle pitts', 'engram', 'bowers', 'james conner', 'swift', 'pollard',
+      'najee harris', 'jaylen warren', 'mostert', 'brian robinson', 'hubbard',
+      'jayden daniels', 'kyler murray', 'anthony richardson', 'stroud', 'prescott',
+      'jordan love', 'burrow', 'purdy'
+    ];
+
+    if (eliteNames.some(star => name.includes(star))) {
+      return true;
+    }
+
+    // 2. Draft Capital: Rounds 1–6 (Search rank or ADP <= 75)
+    const searchRank = Number(player.search_rank || 999);
+    if (searchRank > 0 && searchRank <= 75) {
+      return true;
+    }
+
+    // 3. High Baseline Talent (healthy projected points >= 9.5 or starter depth chart)
+    const rawProj = Number(player.raw_projected_pts || player.projected_pts || player.return_baseline_pts || 0);
+    if (rawProj >= 9.5) {
+      return true;
+    }
+
+    if (player.depth_chart_order === 1 && ['QB', 'RB', 'WR', 'TE'].includes(pos)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Analyze user's current roster to identify starters, bench depth, cut candidates, and IR lock risks
    */
   analyzeUserRoster(userRoster, allPlayersMap = {}, weekProjections = {}, trendingDropsMap = {}, scoringSettings = null, leagueContext = {}) {
@@ -401,15 +511,17 @@ export class WaiverEngine {
       }
     });
 
-    // Sort bench by lowest projected points first to find weakest drop candidates
-    bench.sort((a, b) => a.projected_pts - b.projected_pts);
+    // Sort bench by lowest projected points first to find weakest drop candidates,
+    // strictly excluding untouchable stars via Hard Drop Protection (e.g. Puka Nacua, Travis Etienne)
+    const droppableBench = bench.filter(p => !this.isDropProtected(p));
+    droppableBench.sort((a, b) => a.projected_pts - b.projected_pts);
 
-    const weakestBench = bench.length > 0 ? bench[0] : null;
+    const weakestBench = droppableBench.length > 0 ? droppableBench[0] : null;
 
-    // Weakest by position (for K and DEF, prioritize existing K/DEF assets to prevent dropping skill players)
+    // Weakest by position (strictly respecting Hard Drop Protection)
     const weakestByPos = {};
     ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].forEach(pos => {
-      const posBench = bench.filter(p => p.position === pos);
+      const posBench = droppableBench.filter(p => p.position === pos);
       posBench.sort((a, b) => a.projected_pts - b.projected_pts);
       if (posBench.length > 0) {
         weakestByPos[pos] = posBench[0];
@@ -490,8 +602,8 @@ export class WaiverEngine {
         };
         netDelta = fa.projected_pts;
         isFreeAdd = true;
-      } else if (userAnalysis.bench.length > 0) {
-        // Drop candidate: prefer weakest of same position if exists, otherwise overall weakest bench
+      } else if (userAnalysis.weakestBench) {
+        // Drop candidate: prefer weakest of same position if exists, otherwise overall weakest droppable bench
         const dropCandidate = userAnalysis.weakestByPos[pos] || userAnalysis.weakestBench;
         const dropProj = dropCandidate ? dropCandidate.projected_pts : 0;
         netDelta = Number((fa.projected_pts - dropProj).toFixed(1));
@@ -499,9 +611,18 @@ export class WaiverEngine {
         suggestedDrop = {
           type: 'BENCH_DROP',
           player: dropCandidate,
-          text: dropCandidate ? `Drop ${dropCandidate.full_name} (${dropCandidate.position})` : 'Drop Bench Asset',
+          text: `Drop ${dropCandidate.full_name} (${dropCandidate.position})`,
           delta: netDelta
         };
+      } else if (userAnalysis.bench.length > 0) {
+        // All bench players are drop-protected (e.g. Puka Nacua, Travis Etienne)
+        suggestedDrop = {
+          type: 'BENCH_PROTECTED',
+          player: null,
+          text: 'Bench Protected (No Safe Drop Available)',
+          delta: 0
+        };
+        netDelta = 0;
       } else {
         suggestedDrop = {
           type: 'OPEN_SPOT',
@@ -738,12 +859,28 @@ export class WaiverEngine {
 
     // 1. Role & Net Delta Impact
     if (player.isNextManUp && player.inheritance) {
-      const injStatus = (player.inheritance.injuredPlayer?.injury_status || player.inheritance.injuredPlayer?.status || '').toUpperCase();
-      const isLongTerm = ['IR', 'PUP', 'SUSPENDED'].includes(injStatus);
+      const inh = player.inheritance;
+      const injStatus = (inh.injuredPlayer?.injury_status || inh.injuredPlayer?.status || '').toUpperCase();
+      const isSeasonEnding = Boolean(inh.isSeasonEnding || ['IR', 'PUP', 'SUSPENDED'].includes(injStatus));
+      const isEliteRb1 = Boolean(inh.isEliteRb1 || (pos === 'RB' && (inh.starterProj >= 12.0 || inh.injuredPlayer?.depth_chart_order === 1)));
+
       if (pos === 'RB') {
-        basePct = isLongTerm ? 0.32 : 0.16; // Rest of season workhorse vs short rental
+        if (isSeasonEnding && isEliteRb1) {
+          // BELLCOW RB1 TAKEOVER (e.g. Ollie Gordon taking over for Devon Achane out for year)
+          basePct = 0.50; // 50% baseline for league-winning starter takeover
+        } else if (isSeasonEnding) {
+          basePct = 0.38; // 38% for standard lead back out for season
+        } else if (isEliteRb1) {
+          basePct = 0.28; // 28% for multi-week rental of elite back
+        } else {
+          basePct = 0.18; // 18% for short-term rental
+        }
+      } else if (pos === 'WR') {
+        basePct = isSeasonEnding ? 0.32 : 0.16;
+      } else if (pos === 'TE') {
+        basePct = isSeasonEnding ? 0.25 : 0.12;
       } else {
-        basePct = isLongTerm ? 0.22 : 0.12;
+        basePct = 0.15;
       }
     } else if (netDelta >= 5.0) {
       basePct = 0.22;
@@ -768,7 +905,17 @@ export class WaiverEngine {
     }
 
     // 3. League Historical Spending Pattern Adjustment (if past transactions exist)
-    if (Array.isArray(leagueContext.historicalTransactions) && leagueContext.historicalTransactions.length > 0) {
+    const isEliteTakeover = Boolean(player.isNextManUp && player.inheritance?.isSeasonEnding && player.inheritance?.isEliteRb1);
+
+    if (isEliteTakeover) {
+      // For ELITE BELLCOW TAKEOVER: Do NOT dilute the 50%+ bid with low-value historical fliers!
+      // Instead, treat league historical RB premium and aggression as an UPWARD markup!
+      const leagueRbPrem = Number(leagueContext.tendencies?.leagueRbPremium || 0);
+      const septVel = Number(leagueContext.tendencies?.septemberSpendVelocity || 0);
+      if (leagueRbPrem > 10 || septVel > 25) {
+        basePct += 0.05; // Competitive boost to beat aggressive league opponents
+      }
+    } else if (Array.isArray(leagueContext.historicalTransactions) && leagueContext.historicalTransactions.length > 0) {
       const posTx = leagueContext.historicalTransactions.filter(t => t.position === pos && t.bid > 0);
       if (posTx.length > 0) {
         const avgBid = posTx.reduce((sum, t) => sum + t.bid, 0) / posTx.length;
@@ -787,7 +934,7 @@ export class WaiverEngine {
     } else if (currentWeek >= 5) {
       timeDecay = 0.85;
     }
-    const finalPct = Math.min(0.75, Math.max(0.01, basePct * timeDecay));
+    const finalPct = Math.min(0.85, Math.max(0.01, basePct * timeDecay));
 
     // Calculate smart dollar amount
     let smartDollars = Math.round(faab * finalPct);

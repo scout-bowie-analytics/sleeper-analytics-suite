@@ -3510,7 +3510,8 @@ class WeeklyOptimizerController {
           isWeek0,
           currentWeek,
           leagueSettings: this.state.league?.settings,
-          historicalTransactions
+          historicalTransactions,
+          tendencies: this.state.leagueTendencies
         }
       );
 
