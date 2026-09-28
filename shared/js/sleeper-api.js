@@ -306,6 +306,27 @@ export class SleeperApiClient {
   }
 
   /**
+   * Fetch transactions for a specific week
+   */
+  async getTransactions(leagueId, week = 1) {
+    if (!leagueId || leagueId === 'demo' || leagueId === 'demo_championship_league_2025') {
+      return [];
+    }
+
+    try {
+      const response = await fetch(`${SLEEPER_BASE_URL}/league/${leagueId}/transactions/${week}?t=${Date.now()}`, { cache: 'no-store' });
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) return data;
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch transactions for league ${leagueId} week ${week}:`, e);
+    }
+
+    return [];
+  }
+
+  /**
    * Fetch real-time trending added or dropped players across all Sleeper leagues
    * @param {'add'|'drop'} type 'add' or 'drop'
    * @param {number} lookbackHours 24 or 48 hours

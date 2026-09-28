@@ -1413,6 +1413,41 @@
     <!-- Drawer Body -->
     <div class="waiver-drawer-body">
       
+      <!-- Historical League Tendency & Opponent Profiling Card -->
+      <div id="drawerLeagueTendencyCard" class="league-tendency-card" style="display:none;margin-bottom:12px;">
+        <div class="tendency-header" onclick="weeklyOptimizer.toggleOpponentIntel()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:13px;">🏛️</span>
+            <span style="font-size:11.5px;font-weight:700;color:#fff;">League Tendency Intel (3-Yr History)</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span id="intelExpandIcon" style="font-size:11px;color:var(--gold);font-weight:600;">▼ Opponents</span>
+          </div>
+        </div>
+        <div class="tendency-chips-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px;">
+          <div class="tendency-stat-chip">
+            <span class="chip-lbl">Starting RB Avg Bid</span>
+            <span class="chip-val" id="tendencyRbAvgBid">—</span>
+          </div>
+          <div class="tendency-stat-chip">
+            <span class="chip-lbl">Sept Spend Velocity</span>
+            <span class="chip-val" id="tendencySeptVelocity">—</span>
+          </div>
+          <div class="tendency-stat-chip">
+            <span class="chip-lbl">RB Premium</span>
+            <span class="chip-val" id="tendencyRbPremium">—</span>
+          </div>
+        </div>
+        <!-- Expandable Opponent Intel Panel -->
+        <div id="drawerOpponentIntelPanel" class="opponent-intel-panel" style="display:none;margin-top:10px;border-top:1px solid rgba(255,255,255,0.08);padding-top:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;">Opponent Profiles (W1–W4 Aggression)</span>
+            <button id="btnRefreshHistory" class="refresh-history-btn" onclick="weeklyOptimizer.refreshLeagueHistory(event)" style="background:none;border:none;color:var(--gold);font-size:10.5px;cursor:pointer;padding:2px 4px;font-weight:600;">↻ Refresh History</button>
+          </div>
+          <div id="drawerOpponentIntelList" class="opponent-intel-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+        </div>
+      </div>
+
       <!-- Market Velocity Strip -->
       <div id="drawerMarketVelocityBanner" class="market-velocity-banner" style="display:none;margin-bottom:10px;padding:6px 10px;">
         <div class="market-velocity-title" style="font-size:10.5px;">

@@ -886,6 +886,377 @@ export class WaiverEngine {
   generateClipboardPriorityList(waiverTargets = [], leagueInfo = {}) {
     return this.formatClipboardClaimList(waiverTargets, leagueInfo);
   }
+
+  /**
+   * Recursive Multi-Year League History Crawler
+   * Traverses backward via previous_league_id with a strict maxPriorSeasons cap (default 2).
+   * Ingests all waiver claims (complete and failed) across historical seasons.
+   * Caches pruned transaction list in localStorage with 24h TTL.
+   */
+  async crawlLeagueHistory(startLeagueId, options = {}) {
+    if (!startLeagueId || startLeagueId === 'demo' || startLeagueId === 'demo_championship_league_2025') {
+      return {
+        fromCache: false,
+        seasons: [{ season: '2026', leagueId: 'demo' }],
+        claims: [],
+        managerProfiles: [],
+        tendencies: {
+          avgStartingRbBid: 15,
+          avgStartingRbPct: 15,
+          septemberSpendVelocity: 35,
+          leagueRbPremium: 25,
+          topAggressiveManagers: []
+        }
+      };
+    }
+
+    const cleanStartId = String(startLeagueId).trim();
+    const maxPriorSeasons = options.maxPriorSeasons !== undefined ? Number(options.maxPriorSeasons) : 2;
+    const maxTotalSeasons = maxPriorSeasons + 1; // e.g. 2026 + 2 prior (2025, 2024) = 3 seasons max
+    const currentWeek = Number(options.currentWeek || 1);
+    const forceRefresh = Boolean(options.forceRefresh);
+    const allPlayersMap = options.allPlayersMap || {};
+    const fetchFunc = options.fetchFn || (typeof fetch !== 'undefined' ? fetch : null);
+    const storage = options.localStorageObj || (typeof localStorage !== 'undefined' ? localStorage : null);
+    const cacheKey = `sleeper_history_${cleanStartId}`;
+    const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 Hours TTL
+
+    // 1. Check localStorage cache
+    if (!forceRefresh && storage) {
+      try {
+        const cachedRaw = storage.getItem(cacheKey);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached && cached.timestamp && (Date.now() - cached.timestamp < CACHE_TTL_MS) && Array.isArray(cached.claims)) {
+            const managerProfiles = this.computeManagerProfiles(cached.claims, cached.seasons || [], allPlayersMap);
+            const tendencies = this.computeLeagueTendencies(cached.claims, managerProfiles, cached.seasons || []);
+            return {
+              fromCache: true,
+              seasons: cached.seasons || [],
+              claims: cached.claims,
+              managerProfiles,
+              tendencies
+            };
+          }
+        }
+      } catch (cacheErr) {
+        console.warn('Could not read sleeper_history cache:', cacheErr);
+      }
+    }
+
+    if (!fetchFunc) {
+      throw new Error('No fetch implementation available for crawlLeagueHistory.');
+    }
+
+    const seasons = [];
+    const claims = [];
+    let currLeagueId = cleanStartId;
+    let seasonsCrawled = 0;
+
+    // 2. Recursive Traversal backward via previous_league_id
+    while (currLeagueId && currLeagueId !== 'null' && currLeagueId !== 'undefined' && seasonsCrawled < maxTotalSeasons) {
+      try {
+        // Fetch League info
+        const leagueRes = await fetchFunc(`https://api.sleeper.app/v1/league/${currLeagueId}?t=${Date.now()}`);
+        if (!leagueRes.ok) break;
+        const leagueData = await leagueRes.json();
+        if (!leagueData || !leagueData.season) break;
+
+        const seasonYear = String(leagueData.season);
+        const prevLeagueId = leagueData.previous_league_id ? String(leagueData.previous_league_id).trim() : null;
+        const leagueName = leagueData.name || `Season ${seasonYear}`;
+        const waiverBudget = Number(leagueData.settings?.waiver_budget || 100);
+
+        // Fetch Rosters and Users concurrently to preserve manager identity
+        const [usersRes, rostersRes] = await Promise.all([
+          fetchFunc(`https://api.sleeper.app/v1/league/${currLeagueId}/users?t=${Date.now()}`).catch(() => null),
+          fetchFunc(`https://api.sleeper.app/v1/league/${currLeagueId}/rosters?t=${Date.now()}`).catch(() => null)
+        ]);
+
+        const usersData = usersRes && usersRes.ok ? await usersRes.json() : [];
+        const rostersData = rostersRes && rostersRes.ok ? await rostersRes.json() : [];
+
+        // Build User lookup: userId -> { displayName, avatar }
+        const userMap = new Map();
+        if (Array.isArray(usersData)) {
+          usersData.forEach(u => {
+            if (u && u.user_id) {
+              const dName = u.display_name || u.metadata?.team_name || u.username || `Manager ${u.user_id}`;
+              userMap.set(String(u.user_id), {
+                displayName: dName,
+                avatar: u.avatar || null
+              });
+            }
+          });
+        }
+
+        // Build Roster lookup: rosterId -> { ownerId, displayName, avatar }
+        const rosterToUserMap = new Map();
+        if (Array.isArray(rostersData)) {
+          rostersData.forEach(r => {
+            if (r && r.roster_id !== undefined) {
+              const rId = Number(r.roster_id);
+              const ownerId = r.owner_id ? String(r.owner_id) : null;
+              const uInfo = ownerId ? userMap.get(ownerId) : null;
+              rosterToUserMap.set(rId, {
+                ownerId,
+                displayName: uInfo?.displayName || (r.settings?.team_name ? r.settings.team_name : `Team ${rId}`),
+                avatar: uInfo?.avatar || null
+              });
+            }
+          });
+        }
+
+        // Determine weeks to fetch
+        // Active season (depth 0): fetch only up to current active week
+        // Historical seasons (depth > 0): fetch weeks 1 through 18
+        const isCurrentSeason = (seasonsCrawled === 0);
+        const maxWeekToFetch = isCurrentSeason ? Math.max(1, currentWeek) : 18;
+
+        // Fetch weekly transactions
+        for (let w = 1; w <= maxWeekToFetch; w++) {
+          try {
+            const txRes = await fetchFunc(`https://api.sleeper.app/v1/league/${currLeagueId}/transactions/${w}?t=${Date.now()}`);
+            if (txRes && txRes.ok) {
+              const txList = await txRes.json();
+              if (Array.isArray(txList)) {
+                txList.forEach(tx => {
+                  if (tx && tx.type === 'waiver') {
+                    const status = (tx.status === 'complete') ? 'complete' : 'failed';
+                    const bid = Number(tx.settings?.waiver_bid || 0);
+                    const rosterId = Array.isArray(tx.roster_ids) && tx.roster_ids.length > 0 ? Number(tx.roster_ids[0]) : null;
+                    const managerMeta = rosterId !== null ? rosterToUserMap.get(rosterId) : null;
+                    const managerName = managerMeta?.displayName || (rosterId !== null ? `Team ${rosterId}` : 'Unknown');
+                    const ownerId = managerMeta?.ownerId || null;
+
+                    // Capture all added players in this waiver claim
+                    if (tx.adds && typeof tx.adds === 'object') {
+                      Object.keys(tx.adds).forEach(pid => {
+                        const strPid = String(pid).trim();
+                        // Safe Position Resolution (handles unknown / retired / null gracefully)
+                        let pos = 'UNKNOWN';
+                        if (allPlayersMap && allPlayersMap[strPid]) {
+                          const p = allPlayersMap[strPid];
+                          pos = p.position || (Array.isArray(p.fantasy_positions) ? p.fantasy_positions[0] : 'UNKNOWN');
+                        } else if (/^[A-Z]{2,3}$/.test(strPid)) {
+                          pos = 'DEF';
+                        }
+                        pos = String(pos || 'UNKNOWN').toUpperCase();
+
+                        // Pruned lightweight transaction object
+                        claims.push({
+                          season: seasonYear,
+                          week: w,
+                          manager: managerName,
+                          ownerId: ownerId,
+                          playerId: strPid,
+                          pos: pos,
+                          bid: bid,
+                          status: status
+                        });
+                      });
+                    }
+                  }
+                });
+              }
+            }
+          } catch (txErr) {
+            console.warn(`Error fetching transactions for league ${currLeagueId} week ${w}:`, txErr);
+          }
+        }
+
+        seasons.push({
+          season: seasonYear,
+          leagueId: currLeagueId,
+          name: leagueName,
+          previousLeagueId: prevLeagueId,
+          totalBudget: waiverBudget
+        });
+
+        seasonsCrawled++;
+        currLeagueId = prevLeagueId;
+      } catch (seasonErr) {
+        console.warn(`Failed crawling season league ${currLeagueId}:`, seasonErr);
+        break;
+      }
+    }
+
+    // 3. Cache pruned data in localStorage
+    if (storage) {
+      try {
+        const payloadToCache = {
+          timestamp: Date.now(),
+          startLeagueId: cleanStartId,
+          seasons,
+          claims
+        };
+        storage.setItem(cacheKey, JSON.stringify(payloadToCache));
+      } catch (storageErr) {
+        console.warn('Could not cache league history to localStorage (quota or disabled):', storageErr);
+      }
+    }
+
+    // 4. Compute Metrics
+    const managerProfiles = this.computeManagerProfiles(claims, seasons, allPlayersMap);
+    const tendencies = this.computeLeagueTendencies(claims, managerProfiles, seasons);
+
+    return {
+      fromCache: false,
+      seasons,
+      claims,
+      managerProfiles,
+      tendencies
+    };
+  }
+
+  /**
+   * Compute Manager Profiles (September Aggression %, RB Premium %, Win Rate, and Archetype)
+   */
+  computeManagerProfiles(claims = [], seasons = [], allPlayersMap = {}) {
+    if (!Array.isArray(claims) || claims.length === 0) return [];
+
+    // Group claims by manager identity (prefer ownerId for cross-year persistence, fallback to manager name)
+    const managerGroups = new Map();
+
+    claims.forEach(c => {
+      const key = c.ownerId || c.manager || 'Unknown';
+      if (!managerGroups.has(key)) {
+        managerGroups.set(key, {
+          key,
+          ownerId: c.ownerId || null,
+          displayName: c.manager || 'Unknown Manager',
+          claims: []
+        });
+      }
+      const group = managerGroups.get(key);
+      group.claims.push(c);
+      // Keep most recent non-generic display name
+      if (c.manager && !c.manager.startsWith('Team ') && !c.manager.startsWith('Manager ')) {
+        group.displayName = c.manager;
+      }
+    });
+
+    const profiles = [];
+
+    managerGroups.forEach(group => {
+      const allUserClaims = group.claims;
+      const totalClaims = allUserClaims.length;
+      const wonClaims = allUserClaims.filter(c => c.status === 'complete');
+      const wonCount = wonClaims.length;
+      const winRate = totalClaims > 0 ? Math.round((wonCount / totalClaims) * 100) : 0;
+
+      // September Aggression: Total spend in Weeks 1–4 across all seasons
+      const septWonClaims = wonClaims.filter(c => c.week >= 1 && c.week <= 4);
+      const septSpend = septWonClaims.reduce((sum, c) => sum + (Number(c.bid) || 0), 0);
+      
+      const distinctSeasons = new Set(allUserClaims.map(c => c.season)).size || 1;
+      const totalStartingBudget = distinctSeasons * 100;
+      const septSpendVelocity = totalStartingBudget > 0 
+        ? Math.round((septSpend / totalStartingBudget) * 100)
+        : 0;
+
+      // Positional Spending: RB vs WR/TE
+      const rbClaims = wonClaims.filter(c => c.pos === 'RB' && c.bid > 0);
+      const wrTeClaims = wonClaims.filter(c => ['WR', 'TE'].includes(c.pos) && c.bid > 0);
+
+      const totalRbSpend = rbClaims.reduce((s, c) => s + c.bid, 0);
+      const totalWrTeSpend = wrTeClaims.reduce((s, c) => s + c.bid, 0);
+
+      const avgRbBid = rbClaims.length > 0 ? Number((totalRbSpend / rbClaims.length).toFixed(1)) : 0;
+      const avgWrTeBid = wrTeClaims.length > 0 ? Number((totalWrTeSpend / wrTeClaims.length).toFixed(1)) : 0;
+
+      let rbPremiumPct = 0;
+      if (avgWrTeBid > 0) {
+        rbPremiumPct = Math.round(((avgRbBid - avgWrTeBid) / avgWrTeBid) * 100);
+      } else if (avgRbBid > 0) {
+        rbPremiumPct = 100;
+      }
+
+      // Classify Manager Tendency / Behavioral Archetype
+      let archetype = 'Patient Builder 🧘';
+      let badgeClass = 'badge-patient';
+
+      if (septSpendVelocity >= 35) {
+        archetype = 'Early Spender ⚡';
+        badgeClass = 'badge-early';
+      } else if (rbPremiumPct >= 25 && rbClaims.length >= 1) {
+        archetype = 'RB Chaser 🏃';
+        badgeClass = 'badge-rb';
+      } else if (winRate <= 35 && totalClaims >= 5) {
+        archetype = 'Bargain Hunter 🎯';
+        badgeClass = 'badge-bargain';
+      } else if (septSpendVelocity <= 10 && wonCount >= 3) {
+        archetype = 'Late Saver 🛡️';
+        badgeClass = 'badge-saver';
+      }
+
+      profiles.push({
+        ownerId: group.ownerId,
+        displayName: group.displayName,
+        totalClaims,
+        wonClaims: wonCount,
+        failedClaims: totalClaims - wonCount,
+        winRate,
+        septSpend,
+        septSpendVelocity,
+        avgRbBid,
+        avgWrTeBid,
+        rbPremiumPct,
+        archetype,
+        badgeClass,
+        seasonsCount: distinctSeasons
+      });
+    });
+
+    // Sort by September Spend Velocity descending
+    profiles.sort((a, b) => b.septSpendVelocity - a.septSpendVelocity);
+
+    return profiles;
+  }
+
+  /**
+   * Compute League-Wide Historical Tendencies
+   */
+  computeLeagueTendencies(claims = [], managerProfiles = [], seasons = []) {
+    const allWon = Array.isArray(claims) ? claims.filter(c => c.status === 'complete') : [];
+    const rbWon = allWon.filter(c => c.pos === 'RB' && c.bid > 0);
+    const wrTeWon = allWon.filter(c => ['WR', 'TE'].includes(c.pos) && c.bid > 0);
+
+    // Starting RB average winning bid
+    const startingRbBids = rbWon.filter(c => c.bid >= 5);
+    const targetRbPool = startingRbBids.length > 0 ? startingRbBids : rbWon;
+    const avgStartingRbBid = targetRbPool.length > 0 
+      ? Number((targetRbPool.reduce((s, c) => s + c.bid, 0) / targetRbPool.length).toFixed(1))
+      : 15;
+    const avgStartingRbPct = Math.round((avgStartingRbBid / 100) * 100);
+
+    // September Spend Velocity across league
+    const leagueSeptClaims = allWon.filter(c => c.week >= 1 && c.week <= 4);
+    const leagueSeptTotal = leagueSeptClaims.reduce((s, c) => s + c.bid, 0);
+    const numSeasons = (seasons && seasons.length > 0) ? seasons.length : 1;
+    const totalLeagueBudget = numSeasons * 12 * 100;
+    const septemberSpendVelocity = totalLeagueBudget > 0
+      ? Math.round((leagueSeptTotal / totalLeagueBudget) * 100)
+      : 32;
+
+    // League RB Premium %
+    const avgLeagueRb = rbWon.length > 0 ? (rbWon.reduce((s, c) => s + c.bid, 0) / rbWon.length) : 0;
+    const avgLeagueWrTe = wrTeWon.length > 0 ? (wrTeWon.reduce((s, c) => s + c.bid, 0) / wrTeWon.length) : 0;
+    let leagueRbPremium = 0;
+    if (avgLeagueWrTe > 0) {
+      leagueRbPremium = Math.round(((avgLeagueRb - avgLeagueWrTe) / avgLeagueWrTe) * 100);
+    } else if (avgLeagueRb > 0) {
+      leagueRbPremium = 50;
+    }
+
+    return {
+      avgStartingRbBid,
+      avgStartingRbPct,
+      septemberSpendVelocity,
+      leagueRbPremium,
+      topAggressiveManagers: managerProfiles.slice(0, 5)
+    };
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

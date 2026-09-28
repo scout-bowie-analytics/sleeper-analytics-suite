@@ -407,6 +407,8 @@ class WeeklyOptimizerController {
     window.onDrawerSearchInput = () => this.onDrawerSearchInput();
     window.onDrawerSearchPlayer = (name) => this.onDrawerSearchPlayer(name);
     window.copyDrawerClaims = () => this.copyDrawerClaims();
+    window.toggleOpponentIntel = () => this.toggleOpponentIntel();
+    window.refreshLeagueHistory = (e) => this.refreshLeagueHistory(e);
     window.refreshMatchup = () => this.refreshMatchup();
     window.onQuickWeekChange = (w) => this.onQuickWeekChange(w);
   }
@@ -3469,23 +3471,34 @@ class WeeklyOptimizerController {
                       leagueStatus === 'drafting' || 
                       (currentWeek <= 1 && leagueHasNoPoints);
 
-      // Fetch historical waiver transactions if in-season
-      let historicalTransactions = [];
+      // Multi-Year Historical League Crawl & Opponent Profiling (Depth capped to maxPriorSeasons = 2)
+      let leagueHistoryData = null;
       try {
-        if (this.state.currentLeagueId && currentWeek > 1) {
-          const txList = await sleeperApi.getTransactions(this.state.currentLeagueId, currentWeek - 1);
-          if (Array.isArray(txList)) {
-            historicalTransactions = txList
-              .filter(t => t.type === 'waiver' && t.status === 'complete' && t.settings?.waiver_bid !== undefined)
-              .map(t => ({
-                bid: Number(t.settings.waiver_bid) || 0,
-                roster_id: t.roster_ids?.[0],
-                adds: t.adds
-              }));
-          }
-        }
-      } catch (e) {
-        console.warn('Waiver transaction history unavailable:', e);
+        const activeLeagueId = this.state.currentLeague?.league_id || this.state.currentLeagueId || '1354185157275303936';
+        leagueHistoryData = await this.waiverEngine.crawlLeagueHistory(activeLeagueId, {
+          maxPriorSeasons: 2,
+          currentWeek,
+          allPlayersMap
+        });
+        this.state.leagueHistoryData = leagueHistoryData;
+        this.state.leagueTendencies = leagueHistoryData?.tendencies;
+        this.renderLeagueTendencyCard(leagueHistoryData?.tendencies, leagueHistoryData?.managerProfiles);
+      } catch (crawlErr) {
+        console.warn('Multi-year league history crawl failed:', crawlErr);
+      }
+
+      // Convert claims into historical transactions format for processWaiverWire FAAB calibration
+      let historicalTransactions = [];
+      if (leagueHistoryData?.claims && Array.isArray(leagueHistoryData.claims)) {
+        historicalTransactions = leagueHistoryData.claims
+          .filter(c => c.status === 'complete' && c.bid > 0)
+          .map(c => ({
+            position: c.pos,
+            bid: c.bid,
+            manager: c.manager,
+            week: c.week,
+            season: c.season
+          }));
       }
 
       // Process Net Deltas, FAAB Bids, and Streaming Matrix
@@ -3865,6 +3878,98 @@ class WeeklyOptimizerController {
       }).catch(() => {
         this.showToast('Priority list generated! 🐾');
       });
+    }
+  }
+
+  renderLeagueTendencyCard(tendencies, profiles) {
+    const cardEl = document.getElementById('drawerLeagueTendencyCard');
+    if (!cardEl) return;
+
+    if (!tendencies) {
+      cardEl.style.display = 'none';
+      return;
+    }
+
+    cardEl.style.display = 'block';
+
+    const rbAvgEl = document.getElementById('tendencyRbAvgBid');
+    const septVelEl = document.getElementById('tendencySeptVelocity');
+    const rbPremEl = document.getElementById('tendencyRbPremium');
+
+    if (rbAvgEl) {
+      rbAvgEl.textContent = `$${tendencies.avgStartingRbBid || 15} (${tendencies.avgStartingRbPct || 15}%)`;
+    }
+    if (septVelEl) {
+      septVelEl.textContent = `${tendencies.septemberSpendVelocity || 0}% (W1–W4)`;
+    }
+    if (rbPremEl) {
+      const prem = tendencies.leagueRbPremium || 0;
+      const prefix = prem > 0 ? '+' : '';
+      rbPremEl.textContent = `${prefix}${prem}% vs WR/TE`;
+      rbPremEl.style.color = prem > 15 ? 'var(--gold)' : '#f1f5f9';
+    }
+
+    // Render opponent list
+    const listEl = document.getElementById('drawerOpponentIntelList');
+    if (listEl && Array.isArray(profiles) && profiles.length > 0) {
+      listEl.innerHTML = profiles.map(m => {
+        const premPrefix = m.rbPremiumPct > 0 ? '+' : '';
+        return `
+          <div class="opponent-profile-row">
+            <div style="display:flex;align-items:center;gap:6px;min-width:0;">
+              <span class="opponent-mgr-name" title="${m.displayName}">${m.displayName}</span>
+              <span class="opponent-badge ${m.badgeClass || 'badge-patient'}">${m.archetype || 'Patient'}</span>
+            </div>
+            <div class="opponent-metrics">
+              <span title="September Aggression: % budget spent in Weeks 1–4" style="color:${m.septSpendVelocity >= 35 ? '#fb7185' : 'var(--text)'};">Sept: ${m.septSpendVelocity}%</span>
+              <span title="RB Premium vs WR/TE" style="color:${m.rbPremiumPct >= 20 ? 'var(--gold)' : 'var(--muted)'};">RB: ${premPrefix}${m.rbPremiumPct}%</span>
+              <span title="Waiver Claim Win Rate (${m.wonClaims}/${m.totalClaims})" style="color:var(--muted);">${m.winRate}%</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } else if (listEl) {
+      listEl.innerHTML = `<div style="font-size:11px;color:var(--muted);padding:4px 0;">No multi-year waiver claims recorded.</div>`;
+    }
+  }
+
+  toggleOpponentIntel() {
+    const panel = document.getElementById('drawerOpponentIntelPanel');
+    const icon = document.getElementById('intelExpandIcon');
+    if (!panel) return;
+
+    const isVisible = (panel.style.display !== 'none');
+    if (isVisible) {
+      panel.style.display = 'none';
+      if (icon) icon.textContent = '▼ Opponents';
+    } else {
+      panel.style.display = 'block';
+      if (icon) icon.textContent = '▲ Hide';
+    }
+  }
+
+  async refreshLeagueHistory(event) {
+    if (event) event.stopPropagation();
+    const btn = document.getElementById('btnRefreshHistory');
+    if (btn) btn.textContent = '⏳ Refreshing...';
+
+    try {
+      const activeLeagueId = this.state.currentLeague?.league_id || this.state.currentLeagueId || '1354185157275303936';
+      const history = await this.waiverEngine.crawlLeagueHistory(activeLeagueId, {
+        maxPriorSeasons: 2,
+        currentWeek: Number(this.state.currentWeek || 1),
+        forceRefresh: true,
+        allPlayersMap: this.state.allPlayersMap || {}
+      });
+      this.state.leagueHistoryData = history;
+      this.state.leagueTendencies = history?.tendencies;
+      this.renderLeagueTendencyCard(history?.tendencies, history?.managerProfiles);
+      this.showToast('Updated multi-year league history & opponent intel! 🐾');
+    } catch (e) {
+      console.warn('Failed refreshing league history:', e);
+      this.showToast('Could not refresh league history.');
+    } finally {
+      if (btn) btn.textContent = '↻ Refresh History';
     }
   }
 }
