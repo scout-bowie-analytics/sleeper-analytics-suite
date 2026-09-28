@@ -253,4 +253,76 @@ console.log(`- Short-term rental bid: $${rentalBid.dollars} (${rentalBid.percent
 assert(rentalBid.dollars <= 25, `Rental bid should be <= $25, got $${rentalBid.dollars}`);
 console.log('✅ PASS: Contextual sensitivity verified: short rental gets ~$18-$25 while season takeover gets $55+!');
 
-console.log('\n🎉 ALL DROP PROTECTION & CONTEXTUAL FAAB TESTS PASSED FLAWLESSLY! 🐾');
+// =========================================================================
+// TEST 7: Primary-Only Inheritance (Secondary Backs Not Tagged Next Man Up)
+// =========================================================================
+const miamiRoster = {
+  '9226': achaneInjured,
+  '8888': { player_id: '8888', full_name: 'Ollie Gordon II', position: 'RB', team: 'MIA', depth_chart_order: 2, status: 'Active', injury_status: null },
+  '8889': { player_id: '8889', full_name: 'Carlos Washington', position: 'RB', team: 'MIA', depth_chart_order: 3, status: 'Active', injury_status: null },
+  '8890': { player_id: '8890', full_name: 'Jarquez Hunter', position: 'RB', team: 'MIA', depth_chart_order: 4, status: 'Active', injury_status: null }
+};
+
+const miamiInh = engine.computeRoleInheritance(miamiRoster, {});
+assert.strictEqual(miamiInh.has('8888'), true, 'Primary backup Ollie Gordon must be promoted');
+assert.strictEqual(miamiInh.has('8889'), false, 'Secondary backup Carlos Washington must NOT be promoted');
+assert.strictEqual(miamiInh.has('8890'), false, 'Tertiary backup Jarquez Hunter must NOT be promoted');
+
+const washingtonFaab = engine.calculateSmartFaabBid(miamiRoster['8889'], 0, 100, faabContext);
+assert(washingtonFaab.dollars <= 5, `Secondary backup Carlos Washington FAAB bid must be <= $5, got $${washingtonFaab.dollars}`);
+console.log(`✅ PASS: Primary-only inheritance verified: Carlos Washington gets $${washingtonFaab.dollars} (${washingtonFaab.percent}%), NOT 35%+ FAAB!`);
+
+// =========================================================================
+// TEST 8: Healthy Starter Prevents Erroneous Sidelined Role Inheritance
+// =========================================================================
+const carolinaRoster = {
+  '1111': { player_id: '1111', full_name: 'Chuba Hubbard', position: 'RB', team: 'CAR', depth_chart_order: 1, status: 'Active', injury_status: null },
+  '1112': { player_id: '1112', full_name: 'AJ Dillon', position: 'RB', team: 'CAR', depth_chart_order: 2, status: 'Active', injury_status: null },
+  '1113': { player_id: '1113', full_name: 'Trevor Etienne', position: 'RB', team: 'CAR', depth_chart_order: 4, status: 'Inactive', injury_status: 'IR', injury_notes: 'Out for season' }
+};
+
+const carInh = engine.computeRoleInheritance(carolinaRoster, {});
+assert.strictEqual(carInh.has('1112'), false, 'AJ Dillon must NOT inherit a starting role when Chuba Hubbard is healthy starter');
+const dillonFaab = engine.calculateSmartFaabBid(carolinaRoster['1112'], 0, 100, faabContext);
+assert(dillonFaab.dollars <= 5, `Handcuff AJ Dillon FAAB bid must be <= $5 behind healthy starter, got $${dillonFaab.dollars}`);
+console.log(`✅ PASS: Active healthy starter prevents false inheritance: AJ Dillon bid is $${dillonFaab.dollars} (${dillonFaab.percent}%)`);
+
+// =========================================================================
+// TEST 9: Fullback Filtering in extractFreeAgents
+// =========================================================================
+const poolWithFullbacks = {
+  '9001': { player_id: '9001', full_name: 'Andrew Beck', position: 'RB', depth_chart_position: 'FB', team: 'NYJ', status: 'Active', active: true },
+  '9002': { player_id: '9002', full_name: 'Kyle Juszczyk', position: 'RB', depth_chart_position: 'RB', team: 'SF', status: 'Active', active: true },
+  '9003': { player_id: '9003', full_name: 'Tyler Goodson', position: 'RB', depth_chart_position: 'RB', team: 'DAL', status: 'Active', active: true, depth_chart_order: 2 }
+};
+
+const extracted = engine.extractFreeAgents(poolWithFullbacks, []);
+assert(!extracted.some(p => p.player_id === '9001'), 'Andrew Beck (FB) must be filtered out');
+assert(!extracted.some(p => p.player_id === '9002'), 'Kyle Juszczyk (known fullback) must be filtered out');
+assert(extracted.some(p => p.player_id === '9003'), 'Tyler Goodson (RB) must be included');
+console.log('✅ PASS: Fullbacks (Andrew Beck, Kyle Juszczyk) successfully filtered out of free agent wire');
+
+// =========================================================================
+// TEST 10: Strict DEF / Skill Drop Isolation
+// =========================================================================
+const benchWithProtectedStarsAndDef = {
+  roster_id: 1,
+  starters: ['101', '102'],
+  players: ['101', '102', '9228', '7543', 'DEF_BAL'], // Starters + Puka (WR) + Etienne (RB) + Ravens (DEF)
+  reserve: []
+};
+
+const poolWithDef = {
+  ...allPlayersMap,
+  'DEF_BAL': { player_id: 'DEF_BAL', full_name: 'Baltimore Ravens', position: 'DEF', team: 'BAL', projected_pts: 5.5 }
+};
+
+const benchDefAnalysis = engine.analyzeUserRoster(benchWithProtectedStarsAndDef, poolWithDef, {}, {}, null, { reserve_slots: 0 });
+const processedWithDef = engine.processWaiverWire(freeAgents, benchDefAnalysis, { userFaab: 100 });
+
+// When adding Ollie Gordon (RB), the suggested drop MUST NOT be Baltimore Ravens (DEF)!
+assert.notStrictEqual(processedWithDef[0].suggestedDrop.player?.player_id, 'DEF_BAL', 'Defense must NEVER be suggested as drop for a skill player');
+assert.strictEqual(processedWithDef[0].suggestedDrop.type, 'BENCH_PROTECTED', 'Drop pairing must be BENCH_PROTECTED when all skill bench is protected');
+console.log(`✅ PASS: Strict DEF isolation verified: ${processedWithDef[0].suggestedDrop.text}`);
+
+console.log('\n🎉 ALL 10 DROP PROTECTION & CONTEXTUAL FAAB TESTS PASSED FLAWLESSLY! 🐾');
