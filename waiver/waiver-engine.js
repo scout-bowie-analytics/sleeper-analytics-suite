@@ -331,7 +331,7 @@ export class WaiverEngine {
 
     const name = (player.full_name || player.name || '').toLowerCase().trim();
 
-    // 1. Explicit Elite Stars & Core Staples (Never drop: Puka Nacua, Travis Etienne, etc.)
+    // 1. Explicit Core Star Names (Never drop: Puka Nacua, Travis Etienne, Michael Pittman, etc.)
     const eliteNames = [
       'nacua', 'puka', 'etienne', 'achane', 'jefferson', 'chase', 'lamb', 'st. brown',
       'breece hall', 'bijan', 'mccaffrey', 'gibbs', 'barkley', 'jonathan taylor',
@@ -345,26 +345,33 @@ export class WaiverEngine {
       'kyle pitts', 'engram', 'bowers', 'james conner', 'swift', 'pollard',
       'najee harris', 'jaylen warren', 'mostert', 'brian robinson', 'hubbard',
       'jayden daniels', 'kyler murray', 'anthony richardson', 'stroud', 'prescott',
-      'jordan love', 'burrow', 'purdy'
+      'jordan love', 'burrow', 'purdy', 'pittman', 'godwin', 'diontae', 'addison',
+      'tank dell', 'jaxon smith', 'rome odunze', 'worthy', 'shakir', 'reed'
     ];
 
     if (eliteNames.some(star => name.includes(star))) {
       return true;
     }
 
-    // 2. Draft Capital: Rounds 1–6 (Search rank or ADP <= 75)
+    // 2. Draft Capital: Rounds 1–14 (Search rank or ADP <= 175)
+    // In a 12-to-14 team league, ranks 1-175 represent core drafted starters and rotation pieces
     const searchRank = Number(player.search_rank || 999);
-    if (searchRank > 0 && searchRank <= 75) {
+    if (searchRank > 0 && searchRank <= 175) {
       return true;
     }
 
-    // 3. High Baseline Talent (healthy projected points >= 9.5 or starter depth chart)
-    const rawProj = Number(player.raw_projected_pts || player.projected_pts || player.return_baseline_pts || 0);
-    if (rawProj >= 9.5) {
+    // 3. High Baseline Talent (healthy projected points >= 8.5)
+    const rawProj = Number(player.raw_projected_pts || player.healthy_baseline_pts || player.projected_pts || 0);
+    if (rawProj >= 8.5) {
       return true;
     }
 
-    if (player.depth_chart_order === 1 && ['QB', 'RB', 'WR', 'TE'].includes(pos)) {
+    // 4. Starting NFL depth chart order (Order 1 for QB/RB/TE, Order 1–3 for WR)
+    const order = Number(player.depth_chart_order || 99);
+    if (pos === 'WR' && order <= 3) {
+      return true;
+    }
+    if (order === 1 && ['QB', 'RB', 'TE'].includes(pos)) {
       return true;
     }
 
@@ -459,6 +466,9 @@ export class WaiverEngine {
       const sidelinedStatuses = new Set(['IR', 'IR-R', 'INJURED_RESERVE', 'PUP', 'OUT', 'SUSPENDED', 'SUS', 'INACTIVE', 'FREE AGENT', 'RETIRED', 'DNR']);
       const isSidelined = sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus);
 
+      // Compute healthy baseline projection regardless of whether player is currently sidelined
+      const healthyBaseline = this.estimatePlayerProjection(player, scoringSettings, true);
+
       let proj = 0;
       if (hasNflTeam && !isSidelined) {
         if (weekProjections && weekProjections[pid] !== undefined && Number(weekProjections[pid]) > 0) {
@@ -468,7 +478,7 @@ export class WaiverEngine {
         } else if (player.projected_points !== undefined && Number(player.projected_points) > 0) {
           proj = Number(player.projected_points);
         } else {
-          proj = this.estimatePlayerProjection(player, scoringSettings);
+          proj = healthyBaseline;
         }
       }
 
@@ -493,6 +503,8 @@ export class WaiverEngine {
         full_name: fullName,
         name: fullName,
         projected_pts: Number(proj.toFixed(1)),
+        raw_projected_pts: Number((player.projected_pts && player.projected_pts > 0 ? player.projected_pts : healthyBaseline).toFixed(1)),
+        healthy_baseline_pts: Number(healthyBaseline.toFixed(1)),
         isStarter: starterIds.has(pid),
         isBench: !starterIds.has(pid),
         hasNflTeam,
@@ -789,15 +801,17 @@ export class WaiverEngine {
   /**
    * Baseline Player Projection Estimator (when external projections feed is missing or off-season)
    */
-  estimatePlayerProjection(player, scoringSettings = null) {
+  estimatePlayerProjection(player, scoringSettings = null, ignoreInjury = false) {
     if (!player) return 0.0;
     const team = (player.team || '').trim();
     if (!team || team === 'FA' || team === 'None' || team === 'FA*') return 0.0;
 
-    const status = (player.status || '').toUpperCase();
-    const injStatus = (player.injury_status || '').toUpperCase();
-    const sidelinedStatuses = new Set(['IR', 'PUP', 'OUT', 'SUSPENDED', 'INACTIVE', 'FREE AGENT', 'RETIRED', 'DNR']);
-    if (sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus) || player.active === false) return 0.0;
+    if (!ignoreInjury) {
+      const status = (player.status || '').toUpperCase();
+      const injStatus = (player.injury_status || '').toUpperCase();
+      const sidelinedStatuses = new Set(['IR', 'PUP', 'OUT', 'SUSPENDED', 'INACTIVE', 'FREE AGENT', 'RETIRED', 'DNR']);
+      if (sidelinedStatuses.has(status) || sidelinedStatuses.has(injStatus) || player.active === false) return 0.0;
+    }
 
     let pos = (player.position || '').toUpperCase();
     if (!pos && Array.isArray(player.fantasy_positions) && player.fantasy_positions.length > 0) {

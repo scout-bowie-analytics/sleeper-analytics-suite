@@ -325,4 +325,51 @@ assert.notStrictEqual(processedWithDef[0].suggestedDrop.player?.player_id, 'DEF_
 assert.strictEqual(processedWithDef[0].suggestedDrop.type, 'BENCH_PROTECTED', 'Drop pairing must be BENCH_PROTECTED when all skill bench is protected');
 console.log(`✅ PASS: Strict DEF isolation verified: ${processedWithDef[0].suggestedDrop.text}`);
 
-console.log('\n🎉 ALL 10 DROP PROTECTION & CONTEXTUAL FAAB TESTS PASSED FLAWLESSLY! 🐾');
+// =========================================================================
+// TEST 11: Core Starter OUT with Saturated IR (Michael Pittman Rule)
+// =========================================================================
+const pittmanOutPlayer = {
+  player_id: '6819',
+  full_name: 'Michael Pittman',
+  position: 'WR',
+  team: 'PIT',
+  depth_chart_order: 2,
+  depth_chart_position: 'RWR',
+  search_rank: 106,
+  status: 'Inactive',
+  injury_status: 'OUT',
+  projected_pts: 0.0
+};
+
+const benchWithPittmanAndSchoonmaker = {
+  roster_id: 1,
+  starters: ['101', '102'],
+  players: ['101', '102', '6819', '9502'], // Pittman (OUT) + Schoonmaker (TE)
+  reserve: ['9753'] // IR slot occupied by Charbonnet
+};
+
+const poolWithPittman = {
+  ...allPlayersMap,
+  '6819': pittmanOutPlayer,
+  '9753': { player_id: '9753', full_name: 'Zach Charbonnet', position: 'RB', injury_status: 'PUP' }
+};
+
+const pittmanAnalysis = engine.analyzeUserRoster(
+  benchWithPittmanAndSchoonmaker,
+  poolWithPittman,
+  { '6819': 0.0 },
+  {},
+  null,
+  { leagueSettings: { reserve_slots: 1 } }
+);
+
+const pittmanDecorated = pittmanAnalysis.bench.find(p => p.player_id === '6819');
+assert.strictEqual(engine.isDropProtected(pittmanDecorated), true, 'Michael Pittman must be drop protected even when OUT');
+assert.strictEqual(pittmanAnalysis.weakestSkillBench.player_id, '9502', 'Schoonmaker must be chosen as weakestSkillBench, NEVER Pittman!');
+
+const pittmanProcessed = engine.processWaiverWire(freeAgents, pittmanAnalysis, { userFaab: 100 });
+assert.strictEqual(pittmanProcessed[0].suggestedDrop.player.player_id, '9502', 'Suggested drop must be Schoonmaker, not Pittman');
+assert(!pittmanProcessed[0].suggestedDrop.text.includes('Pittman'), 'Drop text must NOT mention Michael Pittman');
+console.log(`✅ PASS: Michael Pittman OUT protection verified: System protected Pittman and selected ${pittmanProcessed[0].suggestedDrop.player.full_name}`);
+
+console.log('\n🎉 ALL 11 DROP PROTECTION & CONTEXTUAL FAAB TESTS PASSED FLAWLESSLY! 🐾');
